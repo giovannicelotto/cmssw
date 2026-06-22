@@ -20,6 +20,8 @@ using namespace cms::Ort;
 #include <iostream>
 #include <omp.h>
 #include <cmath>
+#include "DataFormats/Common/interface/Wrapper.h"
+#include <vector>
 
 
 class DummyTrackValueMap : public edm::stream::EDProducer<edm::GlobalCache<ONNXRuntime>> {
@@ -42,11 +44,13 @@ DummyTrackValueMap::DummyTrackValueMap(const edm::ParameterSet& iConfig, const O
   theTTBToken(esConsumes<TransientTrackBuilder, TransientTrackRecord>(edm::ESInputTag("", "TransientTrackBuilder"))),
   threshold_(iConfig.getParameter<double>("threshold"))
 {
-    //produces<edm::ValueMap<float>>("SVscore");
+    produces<edm::ValueMap<float>>("SVscore");
+    produces<edm::ValueMap<std::vector<float>>>("edgeScores");
+    produces<edm::ValueMap<std::vector<int>>>("edgeIndices");
     //produces<edm::ValueMap<float>>("SVscoreB");
     //produces<edm::ValueMap<float>>("SVscoreC");
     //produces<edm::ValueMap<float>>("SVscoreCfromB");
-    produces<std::vector<reco::Track>>("selectedTracks");
+    //produces<std::vector<reco::Track>>("selectedTracks");
     produces<nanoaod::FlatTable>("selectedTrackTable");
 }
 std::unique_ptr<ONNXRuntime> DummyTrackValueMap::initializeGlobalCache(const edm::ParameterSet &iConfig) 
@@ -354,7 +358,35 @@ void DummyTrackValueMap::produce(edm::Event& iEvent,const edm::EventSetup &iSetu
           return eb / (ea + eb);
     };
     //std::cout << "sv_logits_flat size = " << sv_logits_flat.size() << std::endl;
-
+    // one vector per valid node, variable length
+    auto sigmoid = [](float x) { return 1.0f / (1.0f + std::exp(-x)); };
+    std::vector<std::vector<float>> score_map(num_tracks); // num_tracks = original tracks->size()
+    std::vector<std::vector<int>> idx_map(num_tracks);
+    
+    for (size_t e = 0; e < edge_i.size(); ++e) {
+        int oi = nodeToOrig[edge_i[e]];  // back to original track index
+        int oj = nodeToOrig[edge_j[e]];
+        float score = sigmoid(edge_logits_flat[e]);
+        // both directions
+        idx_map[oi].push_back(oj);
+        score_map[oi].push_back(score);
+        idx_map[oj].push_back(oi);
+        score_map[oj].push_back(score);
+    }
+    
+    // put in event
+    auto vmScores = std::make_unique<edm::ValueMap<std::vector<float>>>();
+    edm::ValueMap<std::vector<float>>::Filler fillerS(*vmScores);
+    fillerS.insert(tracks, score_map.begin(), score_map.end());
+    fillerS.fill();
+    iEvent.put(std::move(vmScores), "edgeScores");
+    
+    auto vmIndices = std::make_unique<edm::ValueMap<std::vector<int>>>();
+    edm::ValueMap<std::vector<int>>::Filler fillerI(*vmIndices);
+    fillerI.insert(tracks, idx_map.begin(), idx_map.end());
+    fillerI.fill();
+    iEvent.put(std::move(vmIndices), "edgeIndices");
+    
     //std::cout<<"Model output sizes: SV logits=" << sv_logits_flat.size() 
     //         << ", SV sub-logits=" << sv_sub_logits_flat.size() 
     //         << ", edge logits=" << edge_logits_flat.size() << std::endl;
@@ -413,6 +445,7 @@ void DummyTrackValueMap::produce(edm::Event& iEvent,const edm::EventSetup &iSetu
     auto valMap = std::make_unique<edm::ValueMap<float>>();
     edm::ValueMap<float>::Filler filler(*valMap);
     
+    
     //auto putMap = [&](const std::vector<float>& values, const std::string& name) {
     //    auto valMap = std::make_unique<edm::ValueMap<float>>();
     //    edm::ValueMap<float>::Filler filler(*valMap);
@@ -424,7 +457,7 @@ void DummyTrackValueMap::produce(edm::Event& iEvent,const edm::EventSetup &iSetu
 
 
     
-    auto selectedTracks = std::make_unique<std::vector<reco::Track>>();
+    //auto selectedTracks = std::make_unique<std::vector<reco::Track>>();
     std::vector<float> selected_SVscores;  // keep SVscore for selected tracks
     
     for (size_t i = 0; i < tracks->size(); ++i) {
@@ -435,13 +468,15 @@ void DummyTrackValueMap::produce(edm::Event& iEvent,const edm::EventSetup &iSetu
         } else {
 
             selected_SVscores.push_back(softmax2_prob1(ni));
-            if (softmax2_prob1(ni) > threshold_) {
-            selectedTracks->push_back((*tracks)[i]);}
+            //if (softmax2_prob1(ni) > threshold_) {
+            //selectedTracks->push_back((*tracks)[i]);}
         }
     }
 
-
-    iEvent.put(std::move(selectedTracks), "selectedTracks");
+    filler.insert(tracks, selected_SVscores.begin(), selected_SVscores.end());
+    filler.fill();
+    iEvent.put(std::move(valMap), "SVscore");
+    //iEvent.put(std::move(selectedTracks), "selectedTracks");
     // 3. Create a flat table with just one branch for SVscore
     auto table = std::make_unique<nanoaod::FlatTable>(static_cast<unsigned int>(selected_SVscores.size()), "selectedTracks", false);
     

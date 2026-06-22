@@ -28,10 +28,11 @@ genVertexProducer = cms.EDProducer("GenVertexProducer",
     dlenSigMin = cms.double(3.0),
     dR_max = cms.double(0.03),                                   # dR between tracks and daughters to be considered matched
     relPt_max = cms.double(0.2),
-    doubleMatching = cms.bool(True),
+    doubleMatching = cms.bool(False),
+    doubleMatching_nRequiredCommonTracks = cms.int32(3),        # number of tracks required to match the genDaughters
     doubleMatching_maxSignificance = cms.double(999.),
-    doubleMatching_dR_max = cms.double(0.01),
-    doubleMatching_relPt_max = cms.double(0.1)
+    doubleMatching_dR_max = cms.double(0.05),
+    doubleMatching_relPt_max = cms.double(0.4)
 )
 
 

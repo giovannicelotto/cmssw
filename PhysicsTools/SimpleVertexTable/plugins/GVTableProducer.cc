@@ -50,11 +50,16 @@ private:
                                                                         const std::vector<float>& Daughters_eta,  //genparticles
                                                                         const std::vector<float>& Daughters_phi,  //genparticles
                                                                         const std::vector<int>& Daughters_GVidx, // hadron index per daughter
+                                                                        const std::vector<float>& SV_eta,
+                                                                        const std::vector<float>& SV_phi,
+                                                                        const std::vector<float>& GV_eta,
+                                                                        const std::vector<float>& GV_phi,
                                                                         int n_Hadrons,
                                                                         int nRequiredCommonTracks,
                                                                         double dR_max,
                                                                         double relPt_max,
                                                                         bool doubleMatching,
+                                                                        int doubleMatching_nRequiredCommonTracks,
                                                                         double doubleMatching_maxSignificance,
                                                                         double doubleMatching_dR_max,
                                                                         double doubleMatching_relPt_max
@@ -67,6 +72,7 @@ private:
     double dR_max_;
     double relPt_max_;
     bool doubleMatching_;
+    int doubleMatching_nRequiredCommonTracks_;
     double doubleMatching_maxSignificance_;
     double doubleMatching_dR_max_;
     double doubleMatching_relPt_max_;
@@ -82,12 +88,14 @@ GenVertexProducer::GenVertexProducer(const edm::ParameterSet& iConfig):
     dR_max_(iConfig.getParameter<double>("dR_max")),
     relPt_max_(iConfig.getParameter<double>("relPt_max")),
     doubleMatching_(iConfig.getParameter<bool>("doubleMatching")),
+    doubleMatching_nRequiredCommonTracks_(iConfig.getParameter<int>("doubleMatching_nRequiredCommonTracks")),
     doubleMatching_maxSignificance_(iConfig.getParameter<double>("doubleMatching_maxSignificance")),
     doubleMatching_dR_max_(iConfig.getParameter<double>("doubleMatching_dR_max")),
     doubleMatching_relPt_max_(iConfig.getParameter<double>("doubleMatching_relPt_max"))
 {
     produces<nanoaod::FlatTable>("GVTable");
     produces<nanoaod::FlatTable>("GVDaughtersTable");
+    produces<nanoaod::FlatTable>("GVDirectDaughters");
 
 }
 
@@ -110,14 +118,17 @@ void GenVertexProducer::produce(edm::Event& iEvent,
 
         // Output vectors
         std::vector<float> Hadron_pt, Hadron_eta, Hadron_phi;
-        std::vector<float> SV_x, SV_y, SV_z;
+        std::vector<float> SV_x, SV_y, SV_z, SV_eta, SV_phi;
         std::vector<CovMatrix> SV_cov;
         std::vector<float> Hadron_GVx, Hadron_GVy, Hadron_GVz;
         std::vector<float>  Hadron_GVx_i, Hadron_GVy_i, Hadron_GVz_i;
         std::vector<int> Hadron_pdgId;
         std::vector<int> Hadron_pdgClass, Hadron_isB, Hadron_isD;
         std::vector<float> Daughters_pt, Daughters_eta, Daughters_phi;
-        std::vector<int> Daughters_charge, Daughters_GVidx;
+        std::vector<int> Daughters_charge, Daughters_GVidx, Daughters_pdgId;
+
+        std::vector<float> directDaughters_pt, directDaughters_eta, directDaughters_phi;
+        std::vector<int> directDaughters_charge, directDaughters_GVidx, directDaughters_pdgId;
         VertexDistance3D vdist;
         const auto& PV0 = pvsIn->front();
 
@@ -128,6 +139,17 @@ void GenVertexProducer::produce(edm::Event& iEvent,
                 SV_x.push_back(sv.x());
                 SV_y.push_back(sv.y());
                 SV_z.push_back(sv.z());
+
+                // Get Eta and Phi from tracks
+                TLorentzVector p4s_SV = TLorentzVector(0,0,0,0);
+                for (auto it = sv.tracks_begin(); it != sv.tracks_end(); ++it) {
+                    const edm::RefToBase<reco::Track>& trkRef = *it;
+                    TLorentzVector p4;
+                    p4.SetPtEtaPhiM(trkRef->pt(),trkRef->eta(),trkRef->phi(),0.13957039);
+                    p4s_SV += p4;
+                }
+                SV_eta.push_back(p4s_SV.Eta());
+                SV_phi.push_back(p4s_SV.Phi());
                 SV_cov.push_back(sv.covariance());
             }
         }
@@ -142,10 +164,19 @@ void GenVertexProducer::produce(edm::Event& iEvent,
 
             int hadPDG = checkPDG(std::abs(hadron->pdgId())); // 1: Beauty, 2: Charmed, 3: Strange,  4: Tau,  0: Else
             if(hadPDG==0) continue;
+            //     code here
+            //    
+            //    
+            //    
+            //    
+            //  
+
+                
+
 
             //  Collect stable charged daughters
             std::vector<float> temp_pt, temp_eta, temp_phi; // kinematics of gen daughters of the hadron in the loop
-            std::vector<int> temp_charge, temp_GVidx, temp_flav;
+            std::vector<int> temp_charge, temp_GVidx, temp_flav, temp_pdgId;
             int nPack=0;
             float vx=std::numeric_limits<float>::quiet_NaN();
             float vy=std::numeric_limits<float>::quiet_NaN();
@@ -165,6 +196,7 @@ void GenVertexProducer::produce(edm::Event& iEvent,
                         temp_eta.push_back(dau->eta());
                         temp_phi.push_back(dau->phi());
                         temp_charge.push_back(dau->charge());
+                        temp_pdgId.push_back(dau->pdgId());
                         temp_GVidx.push_back(ngv); // hadron index
                         //temp_flav.push_back(hadPDG);
                     }
@@ -212,7 +244,23 @@ void GenVertexProducer::produce(edm::Event& iEvent,
                 Daughters_eta.insert(Daughters_eta.end(), temp_eta.begin(), temp_eta.end());
                 Daughters_phi.insert(Daughters_phi.end(), temp_phi.begin(), temp_phi.end());
                 Daughters_charge.insert(Daughters_charge.end(), temp_charge.begin(), temp_charge.end());
+                Daughters_pdgId.insert(Daughters_pdgId.end(), temp_pdgId.begin(), temp_pdgId.end());
                 Daughters_GVidx.insert(Daughters_GVidx.end(), temp_GVidx.begin(), temp_GVidx.end());
+                for(size_t j=0; j<genParticles->size(); ++j){   
+                    const reco::Candidate* dau = &(*genParticles)[j];
+                    if(dau==hadron) continue;
+                    if (dau->numberOfMothers() > 0){
+                        const reco::Candidate* mother = dau->mother(0);
+                        if (mother == hadron){
+                            directDaughters_pt.push_back(dau->pt());
+                            directDaughters_eta.push_back(dau->eta());
+                            directDaughters_phi.push_back(dau->phi());
+                            directDaughters_charge.push_back(dau->charge());
+                            directDaughters_pdgId.push_back(dau->pdgId());
+                            directDaughters_GVidx.push_back(ngv-1);
+                        }
+                    }
+                }
             }
         }
 
@@ -237,6 +285,7 @@ void GenVertexProducer::produce(edm::Event& iEvent,
             SV_index++;
             }
         }
+
         
         // Compute matrix of distances between SV and GV
         auto distances = computeDistanceMatrix(SV_x, SV_y, SV_z, SV_cov,Hadron_GVx, Hadron_GVy, Hadron_GVz);
@@ -247,7 +296,8 @@ void GenVertexProducer::produce(edm::Event& iEvent,
         std::vector<float> Hadron_minDistNotMatched(ngv, 999.f);
 
         // perform matching based on distance matrix and track-to-daughter matching
-        auto result = matchHadronsToSV(distances,SVtrk_pt, SVtrk_eta, SVtrk_phi, SVtrk_SVidx,Daughters_pt, Daughters_eta, Daughters_phi, Daughters_GVidx,ngv,nRequiredCommonTracks_,dR_max_,relPt_max_,doubleMatching_ , doubleMatching_maxSignificance_ , doubleMatching_dR_max_, doubleMatching_relPt_max_  );
+        auto result = matchHadronsToSV(distances,SVtrk_pt, SVtrk_eta, SVtrk_phi, SVtrk_SVidx,Daughters_pt, Daughters_eta, Daughters_phi, Daughters_GVidx,
+                                        SV_eta,SV_phi,Hadron_eta,Hadron_phi,ngv,nRequiredCommonTracks_,dR_max_,relPt_max_,doubleMatching_ , doubleMatching_nRequiredCommonTracks_, doubleMatching_maxSignificance_ , doubleMatching_dR_max_, doubleMatching_relPt_max_  );
         
         Hadron_SVIdx                = std::get<0>(result);
         Hadron_SVDistance           = std::get<1>(result);
@@ -282,7 +332,16 @@ void GenVertexProducer::produce(edm::Event& iEvent,
         dauTable->addColumn<float>("eta",Daughters_eta,"Daughter eta");
         dauTable->addColumn<float>("phi",Daughters_phi,"Daughter phi");
         dauTable->addColumn<int>("charge",Daughters_charge,"Daughter charge");
+        dauTable->addColumn<int>("pdgId",Daughters_pdgId,"Daughter pdgId");
         dauTable->addColumn<int>("hadronIndex",Daughters_GVidx,"Hadron index");
+
+        auto directdauTable = std::make_unique<nanoaod::FlatTable>(directDaughters_pt.size(),"GVDirectDaughters",false);
+        directdauTable->addColumn<float>("pt",directDaughters_pt,"Daughter pt");
+        directdauTable->addColumn<float>("eta",directDaughters_eta,"Daughter eta");
+        directdauTable->addColumn<float>("phi",directDaughters_phi,"Daughter phi");
+        directdauTable->addColumn<int>("charge",directDaughters_charge,"Daughter charge");
+        directdauTable->addColumn<int>("pdgId",directDaughters_pdgId,"Daughter pdgId");
+        directdauTable->addColumn<int>("hadronIndex",directDaughters_GVidx,"Hadron index");
 
 
         //dauTable->addColumn<int>("hadronFlav",Daughters_flav,"Hadron flavor");
@@ -291,6 +350,7 @@ void GenVertexProducer::produce(edm::Event& iEvent,
         //
         iEvent.put(std::move(gvTable),"GVTable");
         iEvent.put(std::move(dauTable),"GVDaughtersTable");
+        iEvent.put(std::move(directdauTable),"GVDirectDaughters");
 
     }
 
@@ -421,7 +481,23 @@ void GenVertexProducer::printDistanceMatrix(
         std::cout << "\n";
     }
 }
+float computeDR_SV_Had(int bestSV,
+                       int bestHad,
+                       const std::vector<float>& SV_eta,
+                       const std::vector<float>& SV_phi,
+                       const std::vector<float>& GV_eta,
+                       const std::vector<float>& GV_phi)
+{
+    float dEta = SV_eta[bestSV] - GV_eta[bestHad];
 
+    float dPhi = SV_phi[bestSV] - GV_phi[bestHad];
+
+    // wrap phi into [-pi, pi]
+    while (dPhi > M_PI)  dPhi -= 2.0 * M_PI;
+    while (dPhi < -M_PI) dPhi += 2.0 * M_PI;
+
+    return std::sqrt(dEta * dEta + dPhi * dPhi);
+}
 
 std::tuple<std::vector<int>,std::vector<float>,std::vector<float>> GenVertexProducer::matchHadronsToSV(
     std::vector<std::vector<float>> distances,
@@ -433,11 +509,16 @@ std::tuple<std::vector<int>,std::vector<float>,std::vector<float>> GenVertexProd
     const std::vector<float>& Daughters_eta,  //genparticles
     const std::vector<float>& Daughters_phi,  //genparticles
     const std::vector<int>& Daughters_GVidx, // hadron index per daughter
+    const std::vector<float>& SV_eta,
+    const std::vector<float>& SV_phi,
+    const std::vector<float>& GV_eta,
+    const std::vector<float>& GV_phi,
     int n_Hadrons,
     int nRequiredCommonTracks,
     double dR_max,
     double relPt_max,
     bool doubleMatching,
+    int doubleMatching_nRequiredCommonTracks,
     double doubleMatching_maxSignificance,
     double doubleMatching_dR_max,
     double doubleMatching_relPt_max
@@ -544,56 +625,61 @@ std::tuple<std::vector<int>,std::vector<float>,std::vector<float>> GenVertexProd
             }
 
             if (minDist >= 998.5) break;  // done
+            //check whether deltaR bewteen bestSV and bestHad is less than doublematching_dR_max
+            float dR_SV_Had = computeDR_SV_Had(bestSV, bestHad, SV_eta, SV_phi, GV_eta, GV_phi);
+            
 
             svTrackIdxs_fromBestSV.clear();
-        for (size_t i = 0; i < SVtrk_SVidx.size(); ++i) {
-            // among all tracks from all SV, select those from the candidate SV
-            //std::cout<<" Track index "<<i<<" SVtrk_SVidx: "<<SVtrk_SVidx[i]<<" SVtrk_pt: "<<SVtrk_pt[i]<<" Best SV :"<<bestSV<<std::endl;
-            if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > 0.8 && std::fabs(SVtrk_eta[i]) < 2.5) {
-                svTrackIdxs_fromBestSV.push_back(i);
-            }
-        }
-
-        // Select daughters of Hadron
-        std::vector<size_t> GenDaughtersIdxs_fromBestHad;
-        for (size_t i = 0; i < Daughters_GVidx.size(); ++i) {
-            if (Daughters_GVidx[i] == bestHad) {
-                GenDaughtersIdxs_fromBestHad.push_back(i);
-            }
-        }
-
-        // Match logic: check for 1 (2) or more matched tracks by ΔR & dPt/pT
-        //int nRequiredCommonTracks = 1;
-        int common = 0;
-        for (size_t iSV : svTrackIdxs_fromBestSV) {
-            //std::cout<<" Checking SVtrack index "<<iSV<<std::endl;
-            for (size_t iHad : GenDaughtersIdxs_fromBestHad) {
-                //std::cout<<" Checking GVDaughters index "<<iHad<<std::endl;
-                float dR = deltaR(SVtrk_eta[iSV], SVtrk_phi[iSV], Daughters_eta[iHad], Daughters_phi[iHad]);
-                float relPt = std::fabs(SVtrk_pt[iSV] - Daughters_pt[iHad]) / Daughters_pt[iHad];
-                //std::cout<<"Comparing SV track (pt: "<<SVtrk_pt[iSV]<<", eta: "<<SVtrk_eta[iSV]<<", phi: "<<SVtrk_phi[iSV]<<") with Daughter (pt: "<<Daughters_pt[iHad]<<", eta: "<<Daughters_eta[iHad]<<", phi: "<<Daughters_phi[iHad]<<") => dR: "<<dR<<", relPt: "<<relPt<<std::endl;
-                if (dR < doubleMatching_dR_max && relPt < doubleMatching_dR_max) {
-                    ++common;
-                    //std::cout<<"  -> Matched! Common tracks: "<<common<<std::endl;
-                    if (common >= 1) break; // break the iHad cycle
+            for (size_t i = 0; i < SVtrk_SVidx.size(); ++i) {
+                // among all tracks from all SV, select those from the candidate SV
+                //std::cout<<" Track index "<<i<<" SVtrk_SVidx: "<<SVtrk_SVidx[i]<<" SVtrk_pt: "<<SVtrk_pt[i]<<" Best SV :"<<bestSV<<std::endl;
+                if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > 0.8 && std::fabs(SVtrk_eta[i]) < 2.5) {
+                    svTrackIdxs_fromBestSV.push_back(i);
                 }
             }
-            if (common >= 1) break; // break the iSV cycle
+
+            // Select daughters of Hadron
+            std::vector<size_t> GenDaughtersIdxs_fromBestHad;
+            for (size_t i = 0; i < Daughters_GVidx.size(); ++i) {
+                if (Daughters_GVidx[i] == bestHad) {
+                    GenDaughtersIdxs_fromBestHad.push_back(i);
+                }
+            }
+
+            // Match logic: check for 1 (2) or more matched tracks by ΔR & dPt/pT
+            //int nRequiredCommonTracks = 1;
+            int common = 0;
+            for (size_t iSV : svTrackIdxs_fromBestSV) {
+                //std::cout<<" Checking SVtrack index "<<iSV<<std::endl;
+                for (size_t iHad : GenDaughtersIdxs_fromBestHad) {
+                    //std::cout<<" Checking GVDaughters index "<<iHad<<std::endl;
+                    float dR = deltaR(SVtrk_eta[iSV], SVtrk_phi[iSV], Daughters_eta[iHad], Daughters_phi[iHad]);
+                    float relPt = std::fabs(SVtrk_pt[iSV] - Daughters_pt[iHad]) / Daughters_pt[iHad];
+                    //std::cout<<"Comparing SV track (pt: "<<SVtrk_pt[iSV]<<", eta: "<<SVtrk_eta[iSV]<<", phi: "<<SVtrk_phi[iSV]<<") with Daughter (pt: "<<Daughters_pt[iHad]<<", eta: "<<Daughters_eta[iHad]<<", phi: "<<Daughters_phi[iHad]<<") => dR: "<<dR<<", relPt: "<<relPt<<std::endl;
+                    if (dR < doubleMatching_dR_max && relPt < doubleMatching_relPt_max) {
+                        ++common;
+                        //std::cout<<"  -> Matched! Common tracks: "<<common<<std::endl;
+                        if (common >= 1) break; // break the iHad cycle
+                    }
+                }
+                if (common >= doubleMatching_nRequiredCommonTracks) break; // break the iSV cycle
+            }
+            //std::cout<<"\n [DoubleMatching] Pair: SV["<<bestSV<<"] and Hadron["<<bestHad<<"] with distance "<<distancesOriginal[bestSV][bestHad]<<" and dR "<<dR_SV_Had<<" and common tracks "<<common<<std::endl;
+            if (common >= doubleMatching_nRequiredCommonTracks && distancesOriginal[bestSV][bestHad] < doubleMatching_maxSignificance ) {
+            //if (common >= 1 && distancesOriginal[bestSV][bestHad] < doubleMatching_maxSignificance && dR_SV_Had < doubleMatching_dR_max ) {
+
+                Hadron_SVIdx[bestHad] = bestSV;
+                Hadron_SVDistance[bestHad]= -distancesOriginal[bestSV][bestHad];
+                for (int h = 0; h < n_Hadrons; ++h) distances[bestSV][h] = 1000.0;  // remove SV row (MATCHED)
+                for (size_t s = 0; s < nSV; ++s) distances[s][bestHad] = 1000.0;   // remove Hadron column (MATCHED)
+                //std::cout << "[V] Matched Hadron[" << bestHad << "] to SV[" << bestSV << "] (distance = " << distancesOriginal[bestSV][bestHad] << ", common tracks = " << common << ")\n";
+            } else {
+                distances[bestSV][bestHad] = 999.0;  // exclude this pair
+            }
+
+
+
         }
-
-        if (common >= 1 && distancesOriginal[bestSV][bestHad] < doubleMatching_maxSignificance) {
-            Hadron_SVIdx[bestHad] = bestSV;
-            Hadron_SVDistance[bestHad]= -distancesOriginal[bestSV][bestHad];
-            for (int h = 0; h < n_Hadrons; ++h) distances[bestSV][h] = 1000.0;  // remove SV row (MATCHED)
-            for (size_t s = 0; s < nSV; ++s) distances[s][bestHad] = 1000.0;   // remove Hadron column (MATCHED)
-            //std::cout << "[V] Matched Hadron[" << bestHad << "] to SV[" << bestSV << "] (distance = " << distancesOriginal[bestSV][bestHad] << ", common tracks = " << common << ")\n";
-        } else {
-            distances[bestSV][bestHad] = 999.0;  // exclude this pair
-        }
-
-
-
-    }
 
     }
 
