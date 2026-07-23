@@ -35,14 +35,15 @@ private:
   edm::EDGetTokenT<reco::TrackCollection> tracksToken_;
   edm::EDGetTokenT<std::vector<reco::Vertex>> pvsToken_;
   edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> theTTBToken;
-  float threshold_;
+  //float threshold_;
 };
 
 DummyTrackValueMap::DummyTrackValueMap(const edm::ParameterSet& iConfig, const ONNXRuntime *cache):
   tracksToken_(consumes<reco::TrackCollection>(iConfig.getParameter<edm::InputTag>("src"))),
   pvsToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("pvSrc"))),
-  theTTBToken(esConsumes<TransientTrackBuilder, TransientTrackRecord>(edm::ESInputTag("", "TransientTrackBuilder"))),
-  threshold_(iConfig.getParameter<double>("threshold"))
+  theTTBToken(esConsumes<TransientTrackBuilder, TransientTrackRecord>(edm::ESInputTag("", "TransientTrackBuilder")))
+  //
+  // threshold_(iConfig.getParameter<double>("threshold"))
 {
     produces<edm::ValueMap<float>>("SVscore");
     produces<edm::ValueMap<std::vector<float>>>("edgeScores");
@@ -51,7 +52,7 @@ DummyTrackValueMap::DummyTrackValueMap(const edm::ParameterSet& iConfig, const O
     //produces<edm::ValueMap<float>>("SVscoreC");
     //produces<edm::ValueMap<float>>("SVscoreCfromB");
     //produces<std::vector<reco::Track>>("selectedTracks");
-    produces<nanoaod::FlatTable>("selectedTrackTable");
+    //produces<nanoaod::FlatTable>("selectedTrackTable");
 }
 std::unique_ptr<ONNXRuntime> DummyTrackValueMap::initializeGlobalCache(const edm::ParameterSet &iConfig) 
 {
@@ -478,13 +479,13 @@ void DummyTrackValueMap::produce(edm::Event& iEvent,const edm::EventSetup &iSetu
     iEvent.put(std::move(valMap), "SVscore");
     //iEvent.put(std::move(selectedTracks), "selectedTracks");
     // 3. Create a flat table with just one branch for SVscore
-    auto table = std::make_unique<nanoaod::FlatTable>(static_cast<unsigned int>(selected_SVscores.size()), "selectedTracks", false);
+    //auto table = std::make_unique<nanoaod::FlatTable>(static_cast<unsigned int>(selected_SVscores.size()), "selectedTracks", false);
     
     // Correct: no <float> here for vector
     //table->addColumn("selectedTrack_SVscore", selected_SVscores, "SVscore for selected tracks", true);
-    table->addColumn<float>("selectedTrack_SVscore", selected_SVscores, "selectedTrack_SVscore");
+    //table->addColumn<float>("selectedTrack_SVscore", selected_SVscores, "selectedTrack_SVscore");
     
-    iEvent.put(std::move(table), "selectedTrackTable");
+    //iEvent.put(std::move(table), "selectedTrackTable");
 
     //putMap(track_SVscore, "SVscore");
     //putMap(track_SVscore_B, "SVscoreB");
