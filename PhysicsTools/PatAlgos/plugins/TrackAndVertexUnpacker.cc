@@ -42,6 +42,7 @@ namespace pat {
     const edm::EDGetTokenT<reco::VertexCollection>         PVs_;
     const edm::EDGetTokenT<reco::VertexCompositePtrCandidateCollection>         SVs_;
     const edm::EDGetTokenT<std::vector<pat::PackedCandidate> >         AdditionalTracks_;
+	const double minTrackPt_;   // <-- new member
     //////    std::vector<edm::EDGetTokenT<edm::View<reco::Candidate> > > particlesTokens_;
     
   };
@@ -54,7 +55,8 @@ PATTrackAndVertexUnpacker::PATTrackAndVertexUnpacker(const edm::ParameterSet& iC
   Cands_(consumes< std::vector<pat::PackedCandidate> >(iConfig.getParameter<edm::InputTag>("packedCandidates"))),
   PVs_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("slimmedVertices"))),
   SVs_(consumes<reco::VertexCompositePtrCandidateCollection>(iConfig.getParameter<edm::InputTag>("slimmedSecondaryVertices"))),
-  AdditionalTracks_(consumes<pat::PackedCandidateCollection>(iConfig.getParameter<edm::InputTag>("additionalTracks")))
+  AdditionalTracks_(consumes<pat::PackedCandidateCollection>(iConfig.getParameter<edm::InputTag>("additionalTracks"))),
+  minTrackPt_(iConfig.getParameter<double>("minTrackPt"))   // <-- new
 {
     produces<reco::TrackCollection>();
     produces<reco::VertexCollection>();
@@ -82,10 +84,15 @@ void PATTrackAndVertexUnpacker::produce(edm::StreamID, edm::Event & iEvent, cons
 	auto outTks = std::make_unique<std::vector<reco::Track>>();
 	std::map<unsigned int, std::vector<unsigned int> > asso;
 	std::map<unsigned int, unsigned int> trackKeys;
+	std::map<unsigned int, unsigned int> addTrackKeys; // new index to map additional tracks index to the output track collection index
 	unsigned int j=0;
+	
+	// Packed PF Candidates
 	for(unsigned int i=0;i<cands->size();i++)	{
 		const pat::PackedCandidate & c = (*cands)[i];
 		if(c.hasTrackDetails() && c.charge() != 0 && c.numberOfHits()> 0){
+			if(c.pt() <= minTrackPt_)
+        		continue;
 			outTks->push_back(c.pseudoTrack());
 			for(size_t ipv=0;ipv< pvs->size(); ++ipv) {
 				if(c.fromPV(ipv)==pat::PackedCandidate::PVUsedInFit)
@@ -97,17 +104,23 @@ void PATTrackAndVertexUnpacker::produce(edm::StreamID, edm::Event & iEvent, cons
 	}
 
 	int offsetAdd=j;
+
+	// Additional Tracks
 	if (hasAdditionalTracks){
-	for(unsigned int i = 0; i < addTracks->size(); i++) {
-		if( (*addTracks)[i].hasTrackDetails() ){
-			outTks->push_back((*addTracks)[i].pseudoTrack());
-		        for(size_t ipv=0;ipv< pvs->size(); ++ipv) {
-				if((*addTracks)[i].fromPV(ipv)==pat::PackedCandidate::PVUsedInFit)
-					asso[ipv].push_back(j);
-			}
-			j++;
+		for(unsigned int i = 0; i < addTracks->size(); i++) {
+			if(!(*addTracks)[i].hasTrackDetails())
+				continue;
+			if((*addTracks)[i].pseudoTrack().pt() <= minTrackPt_)
+				continue;   // <-- skip, don't advance j
+
+				outTks->push_back((*addTracks)[i].pseudoTrack());
+					for(size_t ipv=0;ipv< pvs->size(); ++ipv) {
+						if((*addTracks)[i].fromPV(ipv)==pat::PackedCandidate::PVUsedInFit)
+						asso[ipv].push_back(j);
+					}
+				addTrackKeys[i] = j;
+				j++;
 		}
-	}
 	}
 	edm::OrphanHandle< std::vector<reco::Track>  > oh = iEvent.put(std::move(outTks));
 	
@@ -117,7 +130,7 @@ void PATTrackAndVertexUnpacker::produce(edm::StreamID, edm::Event & iEvent, cons
 		reco::Vertex  pv = (*pvs)[ipv];
 		for(unsigned int i=0;i<asso[ipv].size();i++)
 		{
-			TrackRef r(oh,asso[ipv][i]);
+			TrackRef r(oh,asso[ipv][i]); //asso[ipv][i] = index wrt oh collection of the track number i-th associated to the vertex number ipv
 			TrackBaseRef rr(r);
 			pv.add(rr);
 		}
@@ -125,20 +138,24 @@ void PATTrackAndVertexUnpacker::produce(edm::StreamID, edm::Event & iEvent, cons
 	}
 	iEvent.put(std::move(outPv));
 
-        auto outSv = std::make_unique<std::vector<reco::Vertex>>();
+	auto outSv = std::make_unique<std::vector<reco::Vertex>>();
 	for(size_t i=0;i< svs->size(); i++) {
-		const reco::VertexCompositePtrCandidate &sv = (*svs)[i];	
-		outSv->push_back(reco::Vertex(sv.vertex(),sv.vertexCovariance(),sv.vertexChi2(),sv.vertexNdof(),0));
-		for(size_t j=0;j<sv.numberOfDaughters();j++){
-	                TrackRef r;
-			if(sv.daughterPtr(j).id() == cands.id()) {
-	                	 r= TrackRef(oh,trackKeys[sv.daughterPtr(j).key()]); // use trackKeys because cand->track has gaps from neutral
-			} else {
+	const reco::VertexCompositePtrCandidate &sv = (*svs)[i];	
+	outSv->push_back(reco::Vertex(sv.vertex(),sv.vertexCovariance(),sv.vertexChi2(),sv.vertexNdof(),0));
+	// last 0 is for pre-reserving any capacity for tracks, but we will add them later
+	for(size_t j=0;j<sv.numberOfDaughters();j++){
+		TrackRef r;
+		if(sv.daughterPtr(j).id() == cands.id()) {
+			// Daughter from PackedCandidate collection
+			// sv.daughterPtr(j).key() returns the index of the PackedCollection
+			r= TrackRef(oh,trackKeys[sv.daughterPtr(j).key()]); // use trackKeys because cand->track has gaps from neutral
+		} else {
+			// Daughter from additionalTracks collection
 //				std::cout << "vertex " << i << " using lost Track " << sv.daughterPtr(j).key()  << "  " << offsetAdd+sv.daughterPtr(j).key() << std::endl;  
-                                r=TrackRef(oh,offsetAdd+sv.daughterPtr(j).key());  // use directly the key because addTracks is only charged
-			}
-        	        TrackBaseRef rr(r);
-			outSv->back().add(rr);
+			r = TrackRef(oh, addTrackKeys[sv.daughterPtr(j).key()]);
+		}
+		TrackBaseRef rr(r);
+		outSv->back().add(rr);
 
 		}	
 	}   
