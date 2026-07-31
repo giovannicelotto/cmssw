@@ -11,7 +11,7 @@
 TrackGVFeaturesProducer::TrackGVFeaturesProducer(const edm::ParameterSet& iConfig)
     : tracksToken_(consumes<std::vector<reco::Track>>(iConfig.getParameter<edm::InputTag>("tracks"))),
       pvToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("primaryVertices"))),
-      svToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("secondaryVertices"))),
+      //svToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("secondaryVertices"))),
       gvTableToken_(consumes<nanoaod::FlatTable>(iConfig.getParameter<edm::InputTag>("gvTable"))),
       gvDauTableToken_(consumes<nanoaod::FlatTable>(iConfig.getParameter<edm::InputTag>("gvDaughtersTable"))),
       ttbToken_(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
@@ -218,19 +218,19 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     iEvent.put(std::move(pairTable), "trackPair");
 
     // ---- GV <-> reconstructed SV matching (chi2 distance, ported from GenVertexProducer) ----
-std::vector<float> SV_x, SV_y, SV_z;
-std::vector<reco::Vertex::CovarianceMatrix> SV_cov;
-VertexDistance3D vdistSV;
-for (auto const& sv : *svH) {
-    Measurement1D dl = vdistSV.distance(pv, VertexState(RecoVertex::convertPos(sv.position()),
-                                                         RecoVertex::convertError(sv.error())));
-    if (dl.value() > 0 && dl.significance() > dlenSigMin_) {
-        SV_x.push_back(sv.x());
-        SV_y.push_back(sv.y());
-        SV_z.push_back(sv.z());
-        SV_cov.push_back(sv.covariance());
-    }
-}
+//std::vector<float> SV_x, SV_y, SV_z;
+//std::vector<reco::Vertex::CovarianceMatrix> SV_cov;
+//VertexDistance3D vdistSV;
+//for (auto const& sv : *svH) {
+//    Measurement1D dl = vdistSV.distance(pv, VertexState(RecoVertex::convertPos(sv.position()),
+//                                                         RecoVertex::convertError(sv.error())));
+//    if (dl.value() > 0 && dl.significance() > dlenSigMin_) {
+//        SV_x.push_back(sv.x());
+//        SV_y.push_back(sv.y());
+//        SV_z.push_back(sv.z());
+//        SV_cov.push_back(sv.covariance());
+//    }
+//}
     //std::vector<float> GV_x_vec(GV_x.begin(), GV_x.end());
     //std::vector<float> GV_y_vec(GV_y.begin(), GV_y.end());
     //std::vector<float> GV_z_vec(GV_z.begin(), GV_z.end());
