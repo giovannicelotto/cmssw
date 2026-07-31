@@ -66,8 +66,8 @@ private:
     bool hasHFDescendant(const reco::Candidate* hadron) const;
 
     edm::EDGetTokenT<edm::View<reco::Candidate>> genToken_;
-    double minDaughterPt_;
     double minHadronPt_;
+    double minDaughterPt_;
     double maxHadronEta_;
     double maxDaughterEta_;
 };
