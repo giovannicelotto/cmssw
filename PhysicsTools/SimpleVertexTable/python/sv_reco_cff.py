@@ -239,7 +239,7 @@ def custom_train_features(process, gvProducerLabel="genVertexProducer"):
         #secondaryVertices = cms.InputTag("myFinalInclusiveSecondaryVertices"),
         gvTable = cms.InputTag(gvProducerLabel, "GVTable"),
         gvDaughtersTable = cms.InputTag(gvProducerLabel, "GVDaughtersTable"),
-        trkPtCut = cms.double(0.8),
+        trkPtCut = cms.double(0.4),
         dRMatchMax = cms.double(0.02),
         relPtMatchMax = cms.double(0.2),
     )
