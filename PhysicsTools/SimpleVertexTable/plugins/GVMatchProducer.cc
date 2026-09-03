@@ -100,6 +100,8 @@ private:
     double doubleMatching_dR_max_;
     double doubleMatching_relPt_max_;
 
+    double trkMinPt_;
+    double trkMaxEta_;
     double trkMaxDeltaR_;
     double trkMaxDPtRel_;
     bool trkCheckCharge_;
@@ -130,6 +132,8 @@ GVMatchProducer::GVMatchProducer(const edm::ParameterSet& iConfig)
       doubleMatching_maxSignificance_(iConfig.getParameter<double>("doubleMatching_maxSignificance")),
       doubleMatching_dR_max_(iConfig.getParameter<double>("doubleMatching_dR_max")),
       doubleMatching_relPt_max_(iConfig.getParameter<double>("doubleMatching_relPt_max")),
+      trkMinPt_(iConfig.getParameter<double>("trkMinPt")),
+      trkMaxEta_(iConfig.getParameter<double>("trkMaxEta")),
       trkMaxDeltaR_(iConfig.getParameter<double>("trkMaxDeltaR")),
       trkMaxDPtRel_(iConfig.getParameter<double>("trkMaxDPtRel")),
       trkCheckCharge_(iConfig.getParameter<bool>("trkCheckCharge")),
@@ -430,7 +434,7 @@ GVMatchProducer::matchHadronsToSV(std::vector<std::vector<float>> distances, con
 
         svTrackIdxs_fromBestSV.clear();
         for (size_t i = 0; i < SVtrk_SVidx.size(); ++i) {
-            if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > 0.8 && std::fabs(SVtrk_eta[i]) < 2.5) {
+            if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > trkMinPt_ && std::fabs(SVtrk_eta[i]) < trkMaxEta_) {
                 svTrackIdxs_fromBestSV.push_back(i);
             }
         }
@@ -498,7 +502,7 @@ GVMatchProducer::matchHadronsToSV(std::vector<std::vector<float>> distances, con
 
             svTrackIdxs_fromBestSV.clear();
             for (size_t i = 0; i < SVtrk_SVidx.size(); ++i) {
-                if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > 0.8 && std::fabs(SVtrk_eta[i]) < 2.5) {
+                if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > trkMinPt_ && std::fabs(SVtrk_eta[i]) < trkMaxEta_) {
                     svTrackIdxs_fromBestSV.push_back(i);
                 }
             }

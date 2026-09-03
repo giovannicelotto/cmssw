@@ -242,5 +242,7 @@ def custom_train_features(process, gvProducerLabel="genVertexProducer"):
         trkPtCut = cms.double(0.4),
         dRMatchMax = cms.double(0.02),
         relPtMatchMax = cms.double(0.2),
+        trkMinPt = cms.double(0.4),
+        trkMaxEta = cms.double(2.5),
     )
     return process
