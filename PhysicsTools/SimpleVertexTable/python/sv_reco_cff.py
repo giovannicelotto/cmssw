@@ -5,7 +5,8 @@ unpackedTracksAndVertices = cms.EDProducer('PATTrackAndVertexUnpacker',
     slimmedVertices = cms.InputTag("offlineSlimmedPrimaryVertices"),
     slimmedSecondaryVertices = cms.InputTag("slimmedSecondaryVertices"),
     additionalTracks = cms.InputTag("lostTracks"),
-    packedCandidates = cms.InputTag("packedPFCandidates")
+    packedCandidates = cms.InputTag("packedPFCandidates"),
+    minTrackPt = cms.double(0.4),
 )
 
 dummyValueMap = cms.EDProducer("DummyTrackValueMap",
@@ -22,26 +23,26 @@ inclusiveVertexFinder = cms.EDProducer('InclusiveVertexFinder',
   svScores = cms.InputTag("dummyValueMap", "SVscore"),
   edgeScores = cms.InputTag("dummyValueMap", "edgeScores"),
   edgeIndices = cms.InputTag("dummyValueMap", "edgeIndices"),
-  svScoreThreshold = cms.double(0.1),   # minimal SV score to enter in IVF
-  seedScoreThreshold = cms.double(0.8), # minimal SV score to be a seed for IVF
-  edgeScoreThreshold = cms.double(0.7),  # minimal edgeScore_ij of track j to be included in seed of track i
+  svScoreThreshold = cms.double(0.),   # minimal SV score to enter in IVF
+  seedScoreThreshold = cms.double(0.), # minimal SV score to be a seed for IVF
+  edgeScoreThreshold = cms.double(0.),  # minimal edgeScore_ij of track j to be included in seed of track i
   beamSpot = cms.InputTag('offlineBeamSpot'),
   clusterizer = cms.PSet(
     #clusterMaxDistance = cms.double(0.1), # 0.05 default | requirement on adding a track to the cluster
     #clusterMaxSignificance = cms.double(9.), # 4.5 default |requirement on adding a track to the cluster
     #clusterMinAngleCosine = cms.double(0.25), # -2 to disable. | 0.5 default requirement on adding a track to the cluster
     #distanceRatio = cms.double(10.),
-    clusterMaxDistance = cms.double(0.1),   #default 0.05
-    clusterMaxSignificance = cms.double(9.0), #default 4.5
-    clusterMinAngleCosine = cms.double(0.25), #default 0.5
-    distanceRatio = cms.double(10.),    # default 20
+    clusterMaxDistance = cms.double(0.05),   #default 0.05
+    clusterMaxSignificance = cms.double(4.5), #default 4.5
+    clusterMinAngleCosine = cms.double(0.5), #default 0.5
+    distanceRatio = cms.double(20.),    # default 20
     maxTimeSignificance = cms.double(3.5), #default 3.5
     seedMax3DIPSignificance = cms.double(9999), #disabled
     seedMax3DIPValue = cms.double(9999), #disabled
     #seedMin3DIPSignificance = cms.double(0.6), # which tracks can start a cluster
     #seedMin3DIPValue = cms.double(0.0025),  # which tracks can start a cluster
-    seedMin3DIPSignificance = cms.double(0.6), #defaul 1.2
-    seedMin3DIPValue = cms.double(0.0025), # defailt 0.005
+    seedMin3DIPSignificance = cms.double(1.2), #defaul 1.2
+    seedMin3DIPValue = cms.double(0.005), # defailt 0.005
   ),
   fitterRatio = cms.double(0.25),
   fitterSigmacut = cms.double(3),
@@ -50,15 +51,15 @@ inclusiveVertexFinder = cms.EDProducer('InclusiveVertexFinder',
   maximumLongitudinalImpactParameter = cms.double(0.3), # 0.3
   maximumTimeSignificance = cms.double(3), # default 3.0
   minHits = cms.uint32(8), #8
-  minPt = cms.double(0.8), #0.8
+  minPt = cms.double(0.4), #0.8
   primaryVertices = cms.InputTag('unpackedTracksAndVertices'),
   #tracks = cms.InputTag('dummyValueMap', 'selectedTracks'),
   tracks = cms.InputTag('unpackedTracksAndVertices'),
   useDirectVertexFitter = cms.bool(True),
   useVertexReco = cms.bool(True),
-  vertexMinAngleCosine = cms.double(0.25), #0.95 default
-  vertexMinDLen2DSig = cms.double(0.125), #2.5 default
-  vertexMinDLenSig = cms.double(0.125), #0.5 default
+  vertexMinAngleCosine = cms.double(0.95), #0.95 default
+  vertexMinDLen2DSig = cms.double(2.5), #2.5 default
+  vertexMinDLenSig = cms.double(0.5), #0.5 default
   vertexReco = cms.PSet(
     finder = cms.string('avr'),
     primcut = cms.double(1),
@@ -111,7 +112,7 @@ myFinalInclusiveSecondaryVertices = vertexMerger.clone(
 svTable = cms.EDProducer("SVTableProducer", 
                         pvSrc=cms.InputTag("offlineSlimmedPrimaryVertices"),
                         src = cms.InputTag("myFinalInclusiveSecondaryVertices"),
-                        dlenSigMin = cms.double(0.))
+                        dlenSigMin = cms.double(0.3))
 
 
 # Missing cut in dlen and dlenSig
@@ -126,8 +127,8 @@ trackVertexVars = cms.EDProducer("TrackVertexVars",
     #Arguments to know if a track was a seed
     seedMax3DIPSignificance = cms.double(9999),   # disabled
     seedMax3DIPValue        = cms.double(9999),   # disabled
-    seedMin3DIPSignificance = cms.double(0.6),    # default 1.2
-    seedMin3DIPValue        = cms.double(0.0025), # default 0.005
+    seedMin3DIPSignificance = cms.double(1.2),    # default 1.2
+    seedMin3DIPValue        = cms.double(0.005), # default 0.005
 )
 
 trackGenMatch = cms.EDProducer('TrackGenMatcher',
@@ -149,6 +150,17 @@ trackTable = cms.EDProducer(
     extension = cms.bool(False),
     variables = cms.PSet(
         pt     = Var("pt", "float", doc="track transverse momentum"),
+        px     = Var("px", "float", doc="track x momentum"),
+        py     = Var("py", "float", doc="track y momentum"),
+        pz     = Var("pz", "float", doc="track z momentum"),
+        energy = Var("sqrt(p()*p()+0.13957*0.13957)", "float", doc="track energy (assuming pion mass hypothesis)"),
+        qoverp = Var("qoverp", "float", doc="track charge/momentum"),
+        qdotp = Var("charge*p()", "float", doc="charge times momentum"),
+        chi2   = Var("chi2", "float", doc="track chi2"),
+        isHighPurity = Var("quality('highPurity')", "bool", doc="track is high purity"),
+        numberOfPixelHits = Var("hitPattern().numberOfValidPixelHits()", "int", doc="number of valid pixel hits"),
+        numberOfStripHits = Var("hitPattern().numberOfValidStripHits()", "int", doc="number of valid strip hits"),
+        #lostInnerHits 
         eta    = Var("eta", "float", doc="track pseudorapidity"),
         phi    = Var("phi", "float", doc="track azimuthal angle"),
         charge = Var("charge", "int", doc="track charge"),
@@ -157,26 +169,30 @@ trackTable = cms.EDProducer(
     externalVariables = cms.PSet(
         # ValueMap<int> produced by TrackGenMatcher, keyed to the SAME
         # "unpackedTracksAndVertices" collection used as src above.
+        #SVscore = ExtVar(cms.InputTag("dummyValueMap", "SVscore"), "float",doc="GNN-based SV score for the track",),
         genPartIdx = ExtVar(cms.InputTag("trackGenMatch", "genPartIdx"),"int",doc="index of the matched gen particle in the genMatch source collection, -1 if unmatched"),
-        SVscore = ExtVar(cms.InputTag("dummyValueMap", "SVscore"), "float",doc="GNN-based SV score for the track",),
         dz         = ExtVar(cms.InputTag("trackVertexVars", "dz"), "float",doc="track dz w.r.t. the primary vertex"),
+        dzSignificance = ExtVar(cms.InputTag("trackVertexVars", "dzSignificance"), "float",doc="track dz significance w.r.t. the primary vertex"),
         timeSig    = ExtVar(cms.InputTag("trackVertexVars", "timeSig"), "float",doc="track time significance w.r.t. the primary vertex"),
         ip3dValue        = ExtVar(cms.InputTag("trackVertexVars", "ip3dValue"), "float",doc="absolute 3D impact parameter value w.r.t. leading PV"),
         ip3dSignificance = ExtVar(cms.InputTag("trackVertexVars", "ip3dSignificance"), "float",doc="absolute 3D impact parameter significance w.r.t. leading PV"),
+        ip2dValue        = ExtVar(cms.InputTag("trackVertexVars", "ip2dValue"), "float",doc="absolute 2D (transverse) impact parameter value w.r.t. leading PV"),
+        ip2dSignificance = ExtVar(cms.InputTag("trackVertexVars", "ip2dSignificance"), "float",doc="absolute 2D (transverse) impact parameter significance w.r.t. leading PV"),
         passSeed         = ExtVar(cms.InputTag("trackVertexVars", "passSeed"), "int",doc="1 if track passes TracksClusteringFromDisplacedSeed's seed window cut"),
     ),
 )
 def custom_sv_tracks(process, threshold_values=(0.0, 0., 0.), f1=0.7, minSig1=2, f2=1., minSig2=0.):
   process.unpackedTracksAndVertices = unpackedTracksAndVertices
   process.inclusiveVertexFinder = inclusiveVertexFinder.clone(
-    svScoreThreshold=cms.double(threshold_values[0]),
-    seedScoreThreshold=cms.double(threshold_values[1]),
-    edgeScoreThreshold=cms.double(threshold_values[2]))
+        svScoreThreshold=cms.double(threshold_values[0]),
+        seedScoreThreshold=cms.double(threshold_values[1]),
+        edgeScoreThreshold=cms.double(threshold_values[2])
+        )
   print(f"Using custom thresholds for SV reconstruction: svScoreThreshold={threshold_values[0]}, seedScoreThreshold={threshold_values[1]}, edgeScoreThreshold={threshold_values[2]}")
   print(f"Using custom values for f1: {f1}, minS1: {minSig1}, f2: {f2}, minS2: {minSig2} ")
   process.vertexMerger = vertexMerger.clone(
-    maxFraction = cms.double(f1),
-    minSignificance = cms.double(minSig1)
+        maxFraction = cms.double(f1),
+        minSignificance = cms.double(minSig1)
   )
   process.trackVertexArbitrator = trackVertexArbitrator
   process.myFinalInclusiveSecondaryVertices = myFinalInclusiveSecondaryVertices.clone(
@@ -195,6 +211,21 @@ def custom_sv_tracks(process, threshold_values=(0.0, 0., 0.), f1=0.7, minSig1=2,
                                       process.trackVertexArbitrator*
                                       process.myFinalInclusiveSecondaryVertices*
                                       process.svTable*
+                                      process.trackVertexVars*
+                                      process.trackGenMatch*
+                                      process.trackTable
+                                      )
+  return process
+
+
+
+
+def custom_sv_tracks_training(process):
+  process.unpackedTracksAndVertices = unpackedTracksAndVertices
+  process.trackGenMatch = trackGenMatch
+  process.trackTable = trackTable
+  process.trackVertexVars = trackVertexVars
+  process.sv_track = cms.Sequence(    process.unpackedTracksAndVertices*
                                       process.trackVertexVars*
                                       process.trackGenMatch*
                                       process.trackTable
