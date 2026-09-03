@@ -231,3 +231,16 @@ def custom_sv_tracks_training(process):
                                       process.trackTable
                                       )
   return process
+
+def custom_train_features(process, gvProducerLabel="genVertexProducer"):
+    process.trackGVFeatures = cms.EDProducer("TrackGVFeaturesProducer",
+        tracks = cms.InputTag("unpackedTracksAndVertices"),
+        primaryVertices = cms.InputTag("unpackedTracksAndVertices"),
+        #secondaryVertices = cms.InputTag("myFinalInclusiveSecondaryVertices"),
+        gvTable = cms.InputTag(gvProducerLabel, "GVTable"),
+        gvDaughtersTable = cms.InputTag(gvProducerLabel, "GVDaughtersTable"),
+        trkPtCut = cms.double(0.8),
+        dRMatchMax = cms.double(0.02),
+        relPtMatchMax = cms.double(0.2),
+    )
+    return process

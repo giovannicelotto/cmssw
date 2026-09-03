@@ -17,8 +17,7 @@ TrackGVFeaturesProducer::TrackGVFeaturesProducer(const edm::ParameterSet& iConfi
       ttbToken_(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
       trkPtCut_(iConfig.getParameter<double>("trkPtCut")),
       dRMatchMax_(iConfig.getParameter<double>("dRMatchMax")),
-      relPtMatchMax_(iConfig.getParameter<double>("relPtMatchMax")),
-      dlenSigMin_(iConfig.getParameter<double>("dlenSigMin"))
+      relPtMatchMax_(iConfig.getParameter<double>("relPtMatchMax"))
 {
     produces<nanoaod::FlatTable>("track");      // extension of trackTable
     produces<nanoaod::FlatTable>("trackPair");  // standalone edge table
@@ -34,8 +33,6 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     iEvent.getByToken(pvToken_, pvH);
     const reco::Vertex& pv = pvH->front();
 
-    edm::Handle<std::vector<reco::Vertex>> svH;
-    iEvent.getByToken(svToken_, svH);
 
     edm::Handle<nanoaod::FlatTable> gvTable;
     iEvent.getByToken(gvTableToken_, gvTable);
@@ -45,7 +42,7 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     const auto& theB = iSetup.getData(ttbToken_);
 
     // ---- Read GV / GVDaughters columns straight out of the upstream FlatTables ----
-    size_t nGV = gvTable->size();
+    //size_t nGV = gvTable->size();
     auto GV_isB = gvTable->columnData<int>(gvTable->columnIndex("isB"));
     auto GV_isD = gvTable->columnData<int>(gvTable->columnIndex("isD"));
     auto GV_fromHF = gvTable->columnData<int>(gvTable->columnIndex("fromHF"));
@@ -57,11 +54,25 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     auto Dau_phi = gvDauTable->columnData<float>(gvDauTable->columnIndex("phi"));
     auto Dau_hadIdx = gvDauTable->columnData<int>(gvDauTable->columnIndex("hadronIndex"));
 
-    // ---- Per-track truth labeling: nearest GVDaughter by deltaR + pt-ratio ----
+
+    // Determine which track is from PV and which is from other PVs
+    std::vector<int> trk_vtxIdx(tracks.size(), -1);
+    for (size_t ipv = 0; ipv < pvH->size(); ++ipv) {
+        const reco::Vertex& vtx = (*pvH)[ipv];
+        for (auto it = vtx.tracks_begin(); it != vtx.tracks_end(); ++it) {
+            const reco::TrackBaseRef& trkRef = *it;
+            if (trkRef.isNull()) continue;
+            size_t idx = trkRef.key();   // index into the same track collection `tracks` was built from
+            if (idx < trk_vtxIdx.size()) {
+                trk_vtxIdx[idx] = static_cast<int>(ipv);
+            }
+        }
+    }
+
+    // Track - Daughters Matching
     size_t nTrk = tracks.size();
     std::vector<int>   trk_hadidx(nTrk, -1);
-    //std::vector<int>   trk_flav(nTrk, -1);
-    std::vector<int>   trk_label(nTrk, 0);  // 6 = unmatched
+    std::vector<int>   trk_label(nTrk, 0);  
     std::vector<float> trk_delr(nTrk, std::numeric_limits<float>::infinity());
     std::vector<float> trk_ptrat(nTrk, std::numeric_limits<float>::quiet_NaN());
     // match trks to genParticles
@@ -81,17 +92,19 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
             bestDau = static_cast<int>(id); //bestPtRatio = ptRatio;
         }
         if (bestDau >= 0) {
+            // Matched to a daughter
             trk_hadidx[it] = Dau_hadIdx[bestDau];
-            //std::cout << "trk " << it << " matched to hadron index: " << trk_hadidx[it] << std::endl;
+            // 0 : PU track (not from PV0)
+            // 1 : from PV0 (primary)
+            // 2 : from B hadron
+            // 3 : from B/C hadron (fromHF)
+            // 4 : from C hadron
+            // 5 : from other secondary (not from B/C hadron)
 
             if (trk_hadidx[it] == -1) {
-                trk_label[it] = 0;       // matched to a daughter, but daughter has no hadron -> Primary
-                //std::cout << "  -> label=0 (hadidx == -1, daughter has no hadron)" << std::endl;
+                trk_label[it] = 0;       // matched to a daughter, but daughter has no hadron? impossible 
+                std::cout << "  -> label=0 (hadidx == -1, daughter has no hadron)" << std::endl;
             } else {
-                //std::cout << "  GV_isB=" << GV_isB[trk_hadidx[it]]
-                //        << " GV_fromHF=" << GV_fromHF[trk_hadidx[it]]
-                //        << " GV_isD=" << GV_isD[trk_hadidx[it]] << std::endl;
-
                 if (GV_isB[trk_hadidx[it]] == 1) {
                     trk_label[it] = 2;       // fromB
                 } else if (GV_fromHF[trk_hadidx[it]] == 1) {
@@ -101,29 +114,31 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
                 } else {
                     trk_label[it] = 5;       // OtherSecondary
                 }
-                //std::cout << "  -> label=" << trk_label[it] << std::endl;
             }
 
-            //trk_delr[it]   = bestDR;
-            //trk_ptrat[it]  = bestPtRatio;
         } else {
-            trk_label[it] = 0;   // no daughter match at all -> Primary (hard scatter)
-            //std::cout << "trk " << it << " no daughter match (bestDau < 0) -> label=0" << std::endl;
+            trk_label[it] = 0;   // track not matched to any daughter
+            
+            
+            
+            // PU CASE if not from PV0
+            if (trk_vtxIdx[it] > 0) {
+                trk_label[it] = 1;   
+                continue;            
+            }
+            
         }
     }
 
     auto trackTableOut = std::make_unique<nanoaod::FlatTable>(nTrk, "track", false, true);  // extension=true
     trackTableOut->addColumn<int>("hadidx", trk_hadidx, "matched GV daughter's hadron index, -1 if unmatched");
-    //trackTableOut->addColumn<int>("flav", trk_flav, "flavor class of matched GV, -1 if unmatched");
     trackTableOut->addColumn<int>("label", trk_label, "truth label (currently mirrors flav; adjust as needed)");
-    //trackTableOut->addColumn<float>("delr", trk_delr, "deltaR to matched GVDaughter");
-    //trackTableOut->addColumn<float>("ptrat", trk_ptrat, "pt ratio to matched GVDaughter");
     iEvent.put(std::move(trackTableOut), "track");
 
     // ---- Track-pair (edge) features ----
     std::vector<int> trk1Idx, trk2Idx;
     std::vector<float> edgeDeltaR, edgeDeltaEta, edgeDeltaPhi, edgeDca, edgeDcaSig, edgeCptopv, edgePvtoPCA1, edgePvtoPCA2,
-                       edgeDotprod1, edgeDotprod2, edgePairMom, edgePairInvMass, edgeLabel;
+                       edgeDotprod1, edgeDotprod2, edgePairMom, edgePairInvMass, edgeLabel, edgePair_pt, edgePair_eta;
 
     std::vector<reco::TransientTrack> t_trks(nTrk);
     for (size_t i = 0; i < nTrk; ++i) t_trks[i] = theB.build(tracks[i]);
@@ -139,15 +154,25 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
             float dr = reco::deltaR(tracks[i].eta(), tracks[i].phi(), tracks[j].eta(), tracks[j].phi());
             float dEta = abs(tracks[i].eta() - tracks[j].eta());
             float dPhi = reco::deltaPhi(tracks[i].phi(), tracks[j].phi());
-            if (dr>1.0) continue;
-            if (dEta>0.5) continue;
-            if (abs(dPhi)>0.8) continue;
+            if (dr>0.8) continue;
+            if (dEta>0.4) continue;
+            if (abs(dPhi)>0.5) continue;
 
             float e1 = std::sqrt(tracks[i].p() * tracks[i].p() + PION_MASS * PION_MASS);
             float e2 = std::sqrt(tracks[j].p() * tracks[j].p() + PION_MASS * PION_MASS);
             float sumPx = tracks[i].px() + tracks[j].px();
             float sumPy = tracks[i].py() + tracks[j].py();
+            float pt_t1t2 = std::sqrt(sumPx*sumPx + sumPy*sumPy);
             float sumPz = tracks[i].pz() + tracks[j].pz();
+            float compositeP   = std::sqrt(sumPx*sumPx + sumPy*sumPy + sumPz*sumPz);
+            float eta_t1t2 = 0.f;
+            if (pt_t1t2 < 1e-6f) {
+                eta_t1t2 = (sumPz > 0) ? 9999.f
+                                            : -9999.f;
+            } else {
+                eta_t1t2 = 0.5f * std::log((compositeP + sumPz) / (compositeP - sumPz));
+            }
+            if (abs(eta_t1t2) > 2.5) continue;
             float sumE  = e1 + e2;
             float invMass = std::sqrt(std::max(0.f, sumE * sumE - (sumPx*sumPx + sumPy*sumPy + sumPz*sumPz)));
             if (invMass>5.0) continue;
@@ -193,6 +218,8 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
             edgeDotprod2.push_back(dot2);
             edgePairMom.push_back(pairMomMag);
             edgePairInvMass.push_back(invMass);
+            edgePair_pt.push_back(pt_t1t2);
+            edgePair_eta.push_back(eta_t1t2);
 
             bool sameHadron = trk_hadidx[i] >= 0 && trk_hadidx[i] == trk_hadidx[j];
             edgeLabel.push_back(sameHadron ? 1.f : 0.f);
@@ -214,47 +241,12 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     pairTable->addColumn<float>("dotprod2", edgeDotprod2, "direction dot product, track2 side");
     pairTable->addColumn<float>("pairMom", edgePairMom, "magnitude of the pair momentum sum");
     pairTable->addColumn<float>("pairInvMass", edgePairInvMass, "invariant mass, pion mass hypothesis");
+    pairTable->addColumn<float>("pt", edgePair_pt, "transverse momentum of the pair");
+    pairTable->addColumn<float>("eta", edgePair_eta, "eta of the pair");
     pairTable->addColumn<float>("edgeLabel", edgeLabel, "1 if both tracks truth-matched to the same GV, else 0");
     iEvent.put(std::move(pairTable), "trackPair");
 
-    // ---- GV <-> reconstructed SV matching (chi2 distance, ported from GenVertexProducer) ----
-//std::vector<float> SV_x, SV_y, SV_z;
-//std::vector<reco::Vertex::CovarianceMatrix> SV_cov;
-//VertexDistance3D vdistSV;
-//for (auto const& sv : *svH) {
-//    Measurement1D dl = vdistSV.distance(pv, VertexState(RecoVertex::convertPos(sv.position()),
-//                                                         RecoVertex::convertError(sv.error())));
-//    if (dl.value() > 0 && dl.significance() > dlenSigMin_) {
-//        SV_x.push_back(sv.x());
-//        SV_y.push_back(sv.y());
-//        SV_z.push_back(sv.z());
-//        SV_cov.push_back(sv.covariance());
-//    }
-//}
-    //std::vector<float> GV_x_vec(GV_x.begin(), GV_x.end());
-    //std::vector<float> GV_y_vec(GV_y.begin(), GV_y.end());
-    //std::vector<float> GV_z_vec(GV_z.begin(), GV_z.end());
-    //auto distances = computeDistanceMatrix(SV_x, SV_y, SV_z, SV_cov, GV_x_vec, GV_y_vec, GV_z_vec);
-    //std::vector<int> Hadron_SVIdx(nGV, -1);
-    ////std::vector<float> Hadron_SVDistance(nGV, -1.f);
-    //auto work = distances;  // simple greedy nearest-match; add common-track requirement here if needed
-    //while (true) {
-    //    float minDist = std::numeric_limits<float>::max();
-    //    int bestSV = -1, bestGV = -1;
-    //    for (size_t s = 0; s < work.size(); ++s)
-    //        for (size_t g = 0; g < (work.empty() ? 0 : work[s].size()); ++g)
-    //            if (work[s][g] < minDist) { minDist = work[s][g]; bestSV = static_cast<int>(s); bestGV = static_cast<int>(g); }
-    //    if (bestSV < 0 || minDist > 1e5f) break;
-    //    Hadron_SVIdx[bestGV] = bestSV;
-    //    //Hadron_SVDistance[bestGV] = minDist;
-    //    for (size_t g = 0; g < work[bestSV].size(); ++g) work[bestSV][g] = 1e6f;
-    //    for (size_t s = 0; s < work.size(); ++s) work[s][bestGV] = 1e6f;
-    //}
 
-    //auto gvExtTable = std::make_unique<nanoaod::FlatTable>(nGV, "GV", false, true);  // extension of GenVertexProducer's "GV" table
-    //gvExtTable->addColumn<int>("SVIdx", Hadron_SVIdx, "index of matched reconstructed SV, -1 if unmatched");
-    //gvExtTable->addColumn<float>("SVDistance", Hadron_SVDistance, "chi2 distance to matched SV");
-    //iEvent.put(std::move(gvExtTable), "GV");
 }
 
 
