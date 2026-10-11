@@ -48,11 +48,11 @@ public:
   static void fillDescriptions(edm::ConfigurationDescriptions &cdesc) {
     edm::ParameterSetDescription pdesc;
     pdesc.add<edm::InputTag>("svScores", edm::InputTag("dummyTrackValueMap", "SVscore"));
-    pdesc.add<double>("svScoreThreshold", 0.5);
+    pdesc.add<double>("svScoreThreshold", 0.);
     pdesc.add<edm::InputTag>("edgeScores", edm::InputTag("dummyTrackValueMap", "edgeScores"));
     pdesc.add<edm::InputTag>("edgeIndices", edm::InputTag("dummyTrackValueMap", "edgeIndices"));
-    pdesc.add<double>("edgeScoreThreshold", 0.5);
-    pdesc.add<double>("seedScoreThreshold", 0.5);
+    pdesc.add<double>("edgeScoreThreshold", 0.);
+    pdesc.add<double>("seedScoreThreshold", 0.);
     pdesc.add<edm::InputTag>("beamSpot", edm::InputTag("offlineBeamSpot"));
     pdesc.add<edm::InputTag>("primaryVertices", edm::InputTag("offlinePrimaryVertices"));
     if (std::is_same<VTX, reco::Vertex>::value) {

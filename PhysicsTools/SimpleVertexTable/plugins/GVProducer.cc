@@ -110,7 +110,7 @@ void GVProducer::produce(edm::Event& iEvent, const edm::EventSetup&) {
     std::vector<float> Hadron_GVx, Hadron_GVy, Hadron_GVz;
     std::vector<float> Hadron_GVx_i, Hadron_GVy_i, Hadron_GVz_i;
     std::vector<int> Hadron_pdgId;
-    std::vector<int> Hadron_pdgClass, Hadron_isB, Hadron_isD;
+    std::vector<int> Hadron_pdgClass, Hadron_isB, Hadron_isD, Hadron_isTau;
     std::vector<int> Hadron_fromHF, Hadron_toHF;
     std::vector<int> GV_nDaughters;
     std::vector<float> GV_maxDaughterPairDeltaR;
@@ -195,8 +195,13 @@ void GVProducer::produce(edm::Event& iEvent, const edm::EventSetup&) {
             } else {
                 Hadron_isD.push_back(0);
             }
+            if (hadPDG == 4) {
+                ngv_tau++;
+                Hadron_isTau.push_back(1);
+            } else {
+                Hadron_isTau.push_back(0);
+            }
             if (hadPDG == 3) ngv_s++;
-            if (hadPDG == 4) ngv_tau++;
             Hadron_fromHF.push_back(hasHFAncestor(hadron) ? 1 : 0);
             Hadron_toHF.push_back(hasHFDescendant(hadron) ? 1 : 0);
             GV_nDaughters.push_back(nPack);
@@ -290,6 +295,7 @@ void GVProducer::produce(edm::Event& iEvent, const edm::EventSetup&) {
     gvTable->addColumn<float>("z_i", Hadron_GVz_i, "Born z coordinate of GV ");
     gvTable->addColumn<int>("Hadron_pdgId", Hadron_pdgId, "Hadron_pdgId");
     gvTable->addColumn<int>("isB", Hadron_isB, "isB");
+    gvTable->addColumn<int>("isTau", Hadron_isTau, "isTau");
     gvTable->addColumn<int>("isD", Hadron_isD, "isD");
     gvTable->addColumn<int>("fromHF", Hadron_fromHF,"1 if an ancestor in the decay chain is itself an HF/long-lived hadron (B/D/S/Tau)");
     gvTable->addColumn<int>("toHF", Hadron_toHF,"1 if a descendant in the decay chain is itself an HF/long-lived hadron (B/D/S/Tau)");

@@ -1,7 +1,7 @@
 import FWCore.ParameterSet.Config as cms
 from  PhysicsTools.NanoAOD.genparticles_cff import *
 
-mergedGenParticles = cms.EDProducer("MergedGenParticleProducer",
+customMergedGenParticles = cms.EDProducer("MergedGenParticleProducer",
                                             inputPruned = cms.InputTag("prunedGenParticles"),
                                             inputPacked = cms.InputTag("packedGenParticles"),
                                             )
@@ -9,8 +9,8 @@ mergedGenParticles = cms.EDProducer("MergedGenParticleProducer",
 
 
 
-finalGenParticles = cms.EDProducer("GenParticlePruner",
-    src = cms.InputTag("mergedGenParticles"),
+customFinalGenParticles = cms.EDProducer("GenParticlePruner",
+    src = cms.InputTag("customMergedGenParticles"),
     select = cms.vstring(
 	"drop *",
         "keep++ abs(pdgId) == 2212  ",#  keep full tau decay chain for some taus
@@ -18,10 +18,10 @@ finalGenParticles = cms.EDProducer("GenParticlePruner",
 )
 
 ##################### Tables for final output and docs ##########################
-genParticleTable = cms.EDProducer("SimpleGenParticleFlatTableProducer",
-    src = cms.InputTag("finalGenParticles"),
+customGenParticleTable = cms.EDProducer("SimpleGenParticleFlatTableProducer",
+    src = cms.InputTag("customFinalGenParticles"),
     cut = cms.string(""), #we should not filter after pruning
-    name= cms.string("GenPart"),
+    name= cms.string("customGenPart"),
     doc = cms.string("interesting gen particles "),
     singleton = cms.bool(False), # the number of entries is variable
     extension = cms.bool(False), # this is the main table for the taus

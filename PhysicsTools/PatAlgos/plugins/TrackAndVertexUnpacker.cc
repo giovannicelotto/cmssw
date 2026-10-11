@@ -43,6 +43,7 @@ namespace pat {
     const edm::EDGetTokenT<reco::VertexCompositePtrCandidateCollection>         SVs_;
     const edm::EDGetTokenT<std::vector<pat::PackedCandidate> >         AdditionalTracks_;
 	const double minTrackPt_;   // <-- new member
+	const double maxTrackEta_; 
     //////    std::vector<edm::EDGetTokenT<edm::View<reco::Candidate> > > particlesTokens_;
     
   };
@@ -56,7 +57,8 @@ PATTrackAndVertexUnpacker::PATTrackAndVertexUnpacker(const edm::ParameterSet& iC
   PVs_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("slimmedVertices"))),
   SVs_(consumes<reco::VertexCompositePtrCandidateCollection>(iConfig.getParameter<edm::InputTag>("slimmedSecondaryVertices"))),
   AdditionalTracks_(consumes<pat::PackedCandidateCollection>(iConfig.getParameter<edm::InputTag>("additionalTracks"))),
-  minTrackPt_(iConfig.getParameter<double>("minTrackPt"))   // <-- new
+  minTrackPt_(iConfig.getParameter<double>("minTrackPt")),   // <-- new
+  maxTrackEta_(iConfig.getParameter<double>("maxTrackEta"))   
 {
     produces<reco::TrackCollection>();
     produces<reco::VertexCollection>();
@@ -93,6 +95,8 @@ void PATTrackAndVertexUnpacker::produce(edm::StreamID, edm::Event & iEvent, cons
 		if(c.hasTrackDetails() && c.charge() != 0 && c.numberOfHits()> 0){
 			if(c.pt() <= minTrackPt_)
         		continue;
+			if(std::abs(c.eta()) >= maxTrackEta_)
+				continue;
 			outTks->push_back(c.pseudoTrack());
 			for(size_t ipv=0;ipv< pvs->size(); ++ipv) {
 				if(c.fromPV(ipv)==pat::PackedCandidate::PVUsedInFit)
@@ -112,6 +116,8 @@ void PATTrackAndVertexUnpacker::produce(edm::StreamID, edm::Event & iEvent, cons
 				continue;
 			if((*addTracks)[i].pseudoTrack().pt() <= minTrackPt_)
 				continue;   // <-- skip, don't advance j
+			if(std::abs((*addTracks)[i].pseudoTrack().eta()) >= maxTrackEta_)
+				continue;
 
 				outTks->push_back((*addTracks)[i].pseudoTrack());
 					for(size_t ipv=0;ipv< pvs->size(); ++ipv) {

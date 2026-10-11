@@ -7,7 +7,9 @@ import FWCore.ParameterSet.Config as cms
 
 from Configuration.Eras.Era_Run3_2024_cff import Run3_2024
 from FWCore.ParameterSet.VarParsing import VarParsing
-import sys 
+import sys
+
+
 
 process = cms.Process('NANO',Run3_2024)
 options = VarParsing('python')
@@ -24,8 +26,8 @@ options.register('SVEdge',      0.,         VarParsing.multiplicity.singleton,  
 
 options.register('f1',          0.7,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f1")
 options.register('minS1',       2.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS1")
-options.register('f2',          1.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f2")
-options.register('minS2',       0.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS2")
+options.register('f2',          1.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f2") # 1 to disable, 0.2 default
+options.register('minS2',       0.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS2") # 0 to disable, 10 default
 
 options.parseArguments()
 # import of standard configurations
@@ -42,14 +44,15 @@ process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 
 process.MessageLogger.cerr.FwkReport.reportEvery = 10
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(1000),
-    output = cms.untracked.int32(1000)
+    input = cms.untracked.int32(200),
+    output = cms.untracked.int32(200)
 )
 
 # Input source
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring( (
         '/store/mc/RunIII2024Summer24MiniAODv6/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/110000/01af4637-202e-4830-abe8-b129a6fc6a0c.root',
+        #'/store/mc/Run3Summer19MiniAOD/TTToHadronic_TuneCP5_14TeV-powheg-pythia8/MINIAODSIM/2024Scenario_106X_mcRun3_2024_realistic_v4-v2/60000/0173267F-D040-B14E-B16B-0602E6CBC48C.root',
         #"/store/mc/RunIII2024Summer24MiniAODv6/QCD_Bin-PT-15to7000_Par-PT-Flat_TuneCH3_13p6TeV_herwig7/MINIAODSIM/NoPU_150X_mcRun3_2024_realistic_v2_ext2-v2/100000/003bdd8a-afd1-402d-ab83-c300d729b8d9.root"
         #'file:/work/gcelotto/btv_mini_rerun/CMSSW_15_0_6/src/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8.root'
      ) ),
@@ -113,21 +116,28 @@ process.NANOEDMAODSIM1output = cms.OutputModule("NanoAODOutputModule",
     ),
     fileName = cms.untracked.string('file:'+processName),
     outputCommands = cms.untracked.vstring(
-        #'keep *',   
-    'drop *',  # Drop everything by default
+    #'keep *',   
+    #'drop *',  # Drop everything by default
     "keep *_svTable_*_*",  # Keep event-level FlatTables
     "keep *_svCandidateTable_*_*",  # Keep event-level FlatTables
     'keep *_genVertexProducer_*_*',
     "keep *_genParticleTable_*_*",  # Keep the merged gen particles
-    #"keep *_DummyTrackValueMap_*_*",
-    "keep *_dummyValueMap_selectedTrackTable_*",
-    "keep *_DummyTrackValueMap_selectedTrackTable_*",
-    "keep *_gvProducer_*_*",
-    "keep *_gvCentralProducer_*_*",
-    "keep *_genCandidateVertexProducer_*_*",
-    "keep nanoaodFlatTable_*Table*_*_*",  # Keep event-level FlatTables
-    #"keep nanoaodFlatTable_svCandidateTable_*_*",  # for central
-    #"keep nanoaodFlatTable_vertexTable_*_*",  # for central
+    #'keep edmTriggerResults_*_*_HLT',
+    "keep *_trackTable_*_*",  
+    "keep *_trackPairFeatures_*_*",  
+    'keep nanoaodFlatTable_modelInference_*_*',     # works
+    'keep nanoaodFlatTable_trackPairLabels_*_*',     # works
+    'keep nanoaodFlatTable_gvMatchProducer_*_*',     # works
+    'keep nanoaodFlatTable_genCentralVertexProducer_*_*',     # works
+    'keep nanoaodFlatTable_vertexTable_*_*',     # works
+    'keep nanoaodFlatTable_genVertexTable_*_*',     # works
+    'keep nanoaodFlatTable_gvMatchTable_*_*',     
+    #"keep *_gvProducer_*_*",
+    #"keep *_gvCentralProducer_*_*",
+    #"keep *_genCandidateVertexProducer_*_*",
+    #"keep nanoaodFlatTable_*Table*_*_*",  # Keep event-level FlatTables
+
+
 
     "keep nanoaodUniqueString_nanoMetadata_*_*",  # Keep basic metadata
     "keep nanoaodMergeableCounterTable_*_*_*",
@@ -175,18 +185,36 @@ process.GlobalTag = GlobalTag(process.GlobalTag, '150X_mcRun3_2024_realistic_v2'
 
 
 sys.path.append("/work/gcelotto/btv_new/CMSSW_15_0_6/src/PhysicsTools/SimpleVertexTable/python")
+from sv_reco_cff import custom_train_features 
 process.load("RecoVertex.AdaptiveVertexFinder.inclusiveVertexing_cff")
-from mergedGenParticles import mergedGenParticles, finalGenParticles, genParticleTable
-process.mergedGenParticles = mergedGenParticles 
-process.finalGenParticles = finalGenParticles 
-process.genParticleTable = genParticleTable 
+
+
+#. 
+#.    MERGED GEN PARTICLES
+#. 
+from mergedGenParticles import customMergedGenParticles, customFinalGenParticles, customGenParticleTable
+process.customMergedGenParticles = customMergedGenParticles 
+process.customFinalGenParticles = customFinalGenParticles 
+process.customGenParticleTable = customGenParticleTable 
 
 
 
 from genVertices import custom_GV_producer
 from sv_candidate_cff import custom_sv_candidate #inclusiveCandidateVertexFinder, candidateVertexMerger, CandidateVertexArbitrator, myCandidateInclusiveSecondaryVertices, myvertexTable, svCandidateTable, slimmedSecondaryVertices
 from sv_reco_cff import custom_sv_tracks
+process.load('PhysicsTools.NanoAOD.nano_cff')
+from PhysicsTools.NanoAOD.nano_cff import nanoAOD_customizeCommon
+
+
+
+#.   
+#.   GEN VERTEX PRODUCER
+#.   
+
+
+process = nanoAOD_customizeCommon(process)
 process = custom_GV_producer(process, collection=options.collection)
+
 
 #print("\n===== GV PRODUCER DEBUG =====")
 #print(process.gvProducer.dumpPython())
@@ -198,30 +226,35 @@ print(options.collection)
 if options.collection=="candidate":
     process = custom_sv_candidate(process)
     process.nanoAOD_step = cms.Path(
-                                process.mergedGenParticles*
-                                process.finalGenParticles*
-                                process.genParticleTable+
+                                process.customMergedGenParticles*
+                                process.customFinalGenParticles*
+                                process.customGenParticleTable+
                                 process.sv_candidate*
                                 process.genVertexProducer_sequence )
 
 elif options.collection=="track":
     process = custom_sv_tracks(process, threshold_values=(options.SVLoose, options.SVSeed, options.SVEdge), f1=options.f1, minSig1=options.minS1, f2=options.f2, minSig2=options.minS2)
+    process = custom_train_features(process, gvProducerLabel="gvProducer")  # NEW
     process.nanoAOD_step = cms.Path(
-                                process.mergedGenParticles*
-                                process.finalGenParticles*
-                                process.genParticleTable+
+                                process.customMergedGenParticles*
+                                process.customFinalGenParticles*
+                                process.customGenParticleTable+
+                                process.genVertexTable* # PURELY GV TABLE
                                 process.sv_track*
-                                process.genVertexProducer_sequence )
+                                process.gvMatchTable
+                                #process.nanoSequenceMC
+                                )
 elif options.collection=="central":
     #process.nanoTableTaskCommon = cms.Task(process.boostedTauTask, process.electronTask, process.jetForMETTask, process.jetPuppiForMETTask, process.jetPuppiTablesTask, process.jetPuppiTask, process.jetTablesTask, process.jetTask, process.linkedObjects, process.lowPtElectronTablesTask, process.lowPtElectronTask, process.metTablesTask, process.muonTablesTask, process.muonTask, process.nanoMetadata, process.photonTask, process.svCandidateTable, process.tauTablesTask, process.tauTask, process.vertexTable, process.vertexTask)
     #process.nanoSequenceCommon = cms.Sequence(process.nanoTableTaskCommon)
     #process.nanoTableTaskFS = cms.Task()
     process.nanoAOD_step = cms.Path(
-                                process.mergedGenParticles*
-                                process.finalGenParticles*
-                                process.genParticleTable+
+                                process.customMergedGenParticles*
+                                process.customFinalGenParticles*
+                                process.customGenParticleTable+
                                 process.nanoSequenceMC*
-                                process.genVertexProducer_sequence )
+                                process.genCentralVertexProducer 
+                                )
 else:
     print("No optinos chosen")
 
@@ -268,10 +301,10 @@ from Configuration.DataProcessing.Utils import addMonitoring
 process = addMonitoring(process)
 
 # Automatic addition of the customisation function from PhysicsTools.NanoAOD.nano_cff
-from PhysicsTools.NanoAOD.nano_cff import nanoAOD_customizeCommon 
+#from PhysicsTools.NanoAOD.nano_cff import nanoAOD_customizeCommon 
 
 #call to customisation function nanoAOD_customizeCommon imported from PhysicsTools.NanoAOD.nano_cff
-process = nanoAOD_customizeCommon(process)
+#process = nanoAOD_customizeCommon(process)
 
 # Automatic addition of the customisation function from PhysicsTools.NanoAOD.custom_jme_cff
 from PhysicsTools.NanoAOD.custom_jme_cff import PrepJMECustomNanoAOD 

@@ -1,7 +1,7 @@
 import onnx
 from onnx import shape_inference
 
-model_path = "/work/gcelotto/btv_new/CMSSW_15_0_6/src/PhysicsTools/data/submod_out128_hyper_1802.onnx"
+model_path = "/work/gcelotto/btv_new/CMSSW_15_0_6/src/PhysicsTools/data/best_20261001_125219.onnx"
 
 # Load model
 model = onnx.load(model_path)

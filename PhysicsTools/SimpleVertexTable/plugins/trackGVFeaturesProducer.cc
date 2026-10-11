@@ -14,6 +14,7 @@ TrackGVFeaturesProducer::TrackGVFeaturesProducer(const edm::ParameterSet& iConfi
       //svToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("secondaryVertices"))),
       gvTableToken_(consumes<nanoaod::FlatTable>(iConfig.getParameter<edm::InputTag>("gvTable"))),
       gvDauTableToken_(consumes<nanoaod::FlatTable>(iConfig.getParameter<edm::InputTag>("gvDaughtersTable"))),
+      genPartIdxToken_(consumes<edm::ValueMap<int>>(iConfig.getParameter<edm::InputTag>("genPartIdx"))),
       ttbToken_(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
       trkPtCut_(iConfig.getParameter<double>("trkPtCut")),
       dRMatchMax_(iConfig.getParameter<double>("dRMatchMax")),
@@ -32,6 +33,9 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     edm::Handle<std::vector<reco::Vertex>> pvH;
     iEvent.getByToken(pvToken_, pvH);
     const reco::Vertex& pv = pvH->front();
+    
+    edm::Handle<edm::ValueMap<int>> genPartIdxH;
+    iEvent.getByToken(genPartIdxToken_, genPartIdxH);
 
 
     edm::Handle<nanoaod::FlatTable> gvTable;
@@ -75,12 +79,18 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     std::vector<int>   trk_label(nTrk, 0);  
     std::vector<float> trk_delr(nTrk, std::numeric_limits<float>::infinity());
     std::vector<float> trk_ptrat(nTrk, std::numeric_limits<float>::quiet_NaN());
+    std::vector<int> trk_genPartIdx(nTrk, -1);
     // match trks to genParticles
     // match is the best dR provided that dPt/pT< ptRatio_cut
     for (size_t it = 0; it < nTrk; ++it) {
         if (tracks[it].pt() < trkPtCut_) continue;
         float bestDR = std::numeric_limits<float>::infinity();
         int bestDau = -1;
+        trk_genPartIdx[it] = genPartIdxH->get(tracksH.id(), it);
+        // truth_label:
+        // 0=PU if no genMathced
+        // 1=fromPV if genMatched but not from SV hadron
+        trk_label[it] = (trk_genPartIdx[it] >= 0) ? 1 : 0;
         //float bestPtRatio = std::numeric_limits<float>::quiet_NaN();
         for (size_t id = 0; id < nDau; ++id) {
             if (Dau_pt[id] <= 0.f) continue;
@@ -107,27 +117,28 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
             } else {
                 if (GV_isB[trk_hadidx[it]] == 1) {
                     trk_label[it] = 2;       // fromB
-                } else if (GV_fromHF[trk_hadidx[it]] == 1) {
-                    trk_label[it] = 3;       // fromBC (covers isD&&fromHF, and fromHF alone)
-                } else if (GV_isD[trk_hadidx[it]] == 1) {
+                } else if ((GV_isD[trk_hadidx[it]] == 1) && (GV_fromHF[trk_hadidx[it]] == 1))  {
+                    trk_label[it] = 3;       // fromBC (covers isD&&fromHF)
+                } else if ((GV_isD[trk_hadidx[it]] == 1) && (GV_fromHF[trk_hadidx[it]] == 0)) {
                     trk_label[it] = 4;       // fromC
                 } else {
                     trk_label[it] = 5;       // OtherSecondary
                 }
             }
 
-        } else {
-            trk_label[it] = 0;   // track not matched to any daughter
-            
-            
-            
-            // PU CASE if not from PV0
-            if (trk_vtxIdx[it] > 0) {
-                trk_label[it] = 1;   
-                continue;            
-            }
-            
-        }
+        } 
+        //else {
+        //    trk_label[it] = 0;   // track not matched to any daughter
+        //    
+        //    
+        //    
+        //    // PU CASE if not from PV0
+        //    if (trk_vtxIdx[it] > 0) {
+        //        trk_label[it] = 1;   
+        //        continue;            
+        //    }
+        //    
+        //}
     }
 
     auto trackTableOut = std::make_unique<nanoaod::FlatTable>(nTrk, "track", false, true);  // extension=true
@@ -148,8 +159,9 @@ void TrackGVFeaturesProducer::produce(edm::Event& iEvent, const edm::EventSetup&
 
     for (size_t i = 0; i < nTrk; ++i) {
         if (!t_trks[i].isValid()) continue;
-        for (size_t j = i + 1; j < nTrk; ++j) {
+        for (size_t j = 0; j < nTrk; ++j) {
             if (!t_trks[j].isValid()) continue;
+            if (i == j) continue;
 
             float dr = reco::deltaR(tracks[i].eta(), tracks[i].phi(), tracks[j].eta(), tracks[j].phi());
             float dEta = abs(tracks[i].eta() - tracks[j].eta());

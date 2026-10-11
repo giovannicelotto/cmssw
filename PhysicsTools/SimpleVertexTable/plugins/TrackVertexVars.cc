@@ -19,6 +19,8 @@
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
 #include "DataFormats/BeamSpot/interface/BeamSpot.h"
+#include "DataFormats/PatCandidates/interface/Muon.h"
+#include "DataFormats/PatCandidates/interface/Electron.h"
 
 #include "TrackingTools/TransientTrack/interface/TransientTrack.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
@@ -60,6 +62,8 @@ private:
   edm::EDGetTokenT<std::vector<reco::Track>> token_tracks;
   edm::EDGetTokenT<reco::VertexCollection> token_primaryVertex;
   edm::EDGetTokenT<reco::BeamSpot> token_beamSpot;
+  edm::EDGetTokenT<std::vector<pat::Muon>> token_muons;
+  edm::EDGetTokenT<std::vector<pat::Electron>> token_electrons;
   edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> token_trackBuilder;
 
   double maxLIP_;      // "maximumLongitudinalImpactParameter", same meaning/default as IVF
@@ -71,6 +75,9 @@ private:
   double seedMin3DIPSignificance_;
   double seedMax3DIPSignificance_;
 
+  double dRMatchMax_;      // NEW: same style/meaning as trackGVFeaturesProducer's dRMatchMax_
+  double relPtMatchMax_;   // NEW
+
   static constexpr float SENTINEL = -9999.f;  // used whenever a quantity can't be computed (no PV, no timing, invalid TT)
 };
 
@@ -78,6 +85,8 @@ TrackVertexVars::TrackVertexVars(const edm::ParameterSet &params)
     : token_tracks(consumes<std::vector<reco::Track>>(params.getParameter<edm::InputTag>("tracks"))),
       token_primaryVertex(consumes<reco::VertexCollection>(params.getParameter<edm::InputTag>("primaryVertices"))),
       token_beamSpot(consumes<reco::BeamSpot>(params.getParameter<edm::InputTag>("beamSpot"))),
+      token_muons(consumes<std::vector<pat::Muon>>(params.getParameter<edm::InputTag>("muons"))),           // NEW
+      token_electrons(consumes<std::vector<pat::Electron>>(params.getParameter<edm::InputTag>("electrons"))), // NEW
       token_trackBuilder(
           esConsumes<TransientTrackBuilder, TransientTrackRecord>(edm::ESInputTag("", "TransientTrackBuilder"))),
       maxLIP_(params.getParameter<double>("maximumLongitudinalImpactParameter")),
@@ -85,7 +94,9 @@ TrackVertexVars::TrackVertexVars(const edm::ParameterSet &params)
       seedMin3DIPValue_(params.getParameter<double>("seedMin3DIPValue")),
       seedMax3DIPValue_(params.getParameter<double>("seedMax3DIPValue")),
       seedMin3DIPSignificance_(params.getParameter<double>("seedMin3DIPSignificance")),
-      seedMax3DIPSignificance_(params.getParameter<double>("seedMax3DIPSignificance")) {
+      seedMax3DIPSignificance_(params.getParameter<double>("seedMax3DIPSignificance")),
+      dRMatchMax_(params.getParameter<double>("dRMatchMax")),           // NEW
+      relPtMatchMax_(params.getParameter<double>("relPtMatchMax")) {    // NEW
   produces<edm::ValueMap<float>>("dz");
   produces<edm::ValueMap<float>>("dzSignificance");
   produces<edm::ValueMap<float>>("ip2dValue");
@@ -96,6 +107,8 @@ TrackVertexVars::TrackVertexVars(const edm::ParameterSet &params)
   produces<edm::ValueMap<float>>("ip3dValue");
   produces<edm::ValueMap<float>>("ip3dSignificance");
   produces<edm::ValueMap<int>>("passSeed");
+  produces<edm::ValueMap<int>>("isMuon");       // NEW
+  produces<edm::ValueMap<int>>("isElectron");   // NEW
 }
 
 void TrackVertexVars::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
@@ -103,15 +116,16 @@ void TrackVertexVars::fillDescriptions(edm::ConfigurationDescriptions &descripti
   desc.add<edm::InputTag>("tracks", edm::InputTag("unpackedTracksAndVertices"));
   desc.add<edm::InputTag>("primaryVertices", edm::InputTag("offlinePrimaryVertices"));
   desc.add<edm::InputTag>("beamSpot", edm::InputTag("offlineBeamSpot"));
-  // same defaults as TemplatedInclusiveVertexFinder::fillDescriptions()
+  desc.add<edm::InputTag>("muons", edm::InputTag("slimmedMuons"));           // NEW
+  desc.add<edm::InputTag>("electrons", edm::InputTag("slimmedElectrons"));   // NEW
   desc.add<double>("maximumLongitudinalImpactParameter", 0.3);
   desc.add<double>("maximumTimeSignificance", 3.0);
-  // same defaults as TracksClusteringFromDisplacedSeed's clusterizer PSet (seedMin3DIP*); override
-  // these to match whatever you actually pass to the clusterizer PSet in your IVF config
   desc.add<double>("seedMin3DIPValue", 0.005);
   desc.add<double>("seedMax3DIPValue", 9999.0);
   desc.add<double>("seedMin3DIPSignificance", 1.2);
   desc.add<double>("seedMax3DIPSignificance", 9999.0);
+  desc.add<double>("dRMatchMax", 0.01);      // NEW — tight by default, tracks are matched 1:1 to a lepton, not a jet-level cone
+  desc.add<double>("relPtMatchMax", 0.1);    // NEW
   descriptions.addWithDefaultLabel(desc);
 }
 
@@ -127,6 +141,12 @@ void TrackVertexVars::produce(edm::Event &event, const edm::EventSetup &es) {
   edm::Handle<BeamSpot> beamSpot;
   event.getByToken(token_beamSpot, beamSpot);
 
+
+  edm::Handle<std::vector<pat::Muon>> muons;          // NEW
+  event.getByToken(token_muons, muons);                // NEW
+  edm::Handle<std::vector<pat::Electron>> electrons;    // NEW
+  event.getByToken(token_electrons, electrons);         // NEW
+
   edm::ESHandle<TransientTrackBuilder> trackBuilder = es.getHandle(token_trackBuilder);
 
   size_t nTrk = tracks->size();
@@ -140,6 +160,8 @@ void TrackVertexVars::produce(edm::Event &event, const edm::EventSetup &es) {
   std::vector<float> ip3dValue(nTrk, SENTINEL);
   std::vector<float> ip3dSignificance(nTrk, SENTINEL);
   std::vector<int> passSeed(nTrk, 0);
+  std::vector<int> isMuon(nTrk, 0);       // NEW
+  std::vector<int> isElectron(nTrk, 0);   // NEW
 
   if (!primaryVertices->empty()) {
     const Vertex &pv = (*primaryVertices)[0];
@@ -208,7 +230,47 @@ void TrackVertexVars::produce(edm::Event &event, const edm::EventSetup &es) {
       // else: ip3dValue/ip3dSignificance stay SENTINEL, passSeed stays 0 (same as IVF: ip.first==false -> not a seed)
     }
   }
+  
+  
+  // ---- Track-lepton matching (isMuon / isElectron) ----
+  // Same style as trackGVFeaturesProducer's daughter matching: best-dR match
+  // within a relative-pT window, evaluated independently of PV availability.
+  for (size_t i = 0; i < nTrk; ++i) {
+    const Track &trk = (*tracks)[i];
+    float trkEta = trk.eta();
+    float trkPhi = trk.phi();
+    float trkPt  = trk.pt();
 
+    float bestDR_mu = std::numeric_limits<float>::infinity();
+    for (const auto &mu : *muons) {
+      float ptRatio = std::abs(trkPt - mu.pt()) / mu.pt();
+      if (ptRatio > relPtMatchMax_) continue;
+      float dr = reco::deltaR(trkEta, trkPhi, mu.eta(), mu.phi());
+      if (dr >= dRMatchMax_ || dr >= bestDR_mu) continue;
+      bestDR_mu = dr;
+      isMuon[i] = 1;
+    }
+    //if (std::isfinite(bestDR_mu)) {
+    //  std::cout << "[TrackVertexVars][muon] trk " << i
+    //            << " closest dR=" << bestDR_mu
+    //            << " matched=" << isMuon[i] << std::endl;
+    //}
+
+    float bestDR_e = std::numeric_limits<float>::infinity();
+    for (const auto &ele : *electrons) {
+      float ptRatio = std::abs(trkPt - ele.pt()) / ele.pt();
+      if (ptRatio > relPtMatchMax_) continue;
+      float dr = reco::deltaR(trkEta, trkPhi, ele.eta(), ele.phi());
+      if (dr >= dRMatchMax_ || dr >= bestDR_e) continue;
+      bestDR_e = dr;
+      isElectron[i] = 1;
+    }
+    //if (std::isfinite(bestDR_e)) {
+    //  std::cout << "[TrackVertexVars][electron] trk " << i
+    //            << " closest dR=" << bestDR_e
+    //            << " matched=" << isElectron[i] << std::endl;
+    //}
+  }
   auto dzMap = std::make_unique<edm::ValueMap<float>>();
   edm::ValueMap<float>::Filler dzFiller(*dzMap);
   dzFiller.insert(tracks, dz.begin(), dz.end());
@@ -268,6 +330,18 @@ void TrackVertexVars::produce(edm::Event &event, const edm::EventSetup &es) {
   ip2dSigFiller.insert(tracks, ip2dSignificance.begin(), ip2dSignificance.end());
   ip2dSigFiller.fill();
   event.put(std::move(ip2dSigMap), "ip2dSignificance");
+
+  auto isMuonMap = std::make_unique<edm::ValueMap<int>>();
+  edm::ValueMap<int>::Filler isMuonFiller(*isMuonMap);
+  isMuonFiller.insert(tracks, isMuon.begin(), isMuon.end());
+  isMuonFiller.fill();
+  event.put(std::move(isMuonMap), "isMuon");
+
+  auto isElectronMap = std::make_unique<edm::ValueMap<int>>();
+  edm::ValueMap<int>::Filler isElectronFiller(*isElectronMap);
+  isElectronFiller.insert(tracks, isElectron.begin(), isElectron.end());
+  isElectronFiller.fill();
+  event.put(std::move(isElectronMap), "isElectron");
 }
 
 #include "FWCore/Framework/interface/MakerMacros.h"
