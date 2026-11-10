@@ -19,7 +19,7 @@ filteredTracks = cms.EDProducer(
     "PATTrackFromVertexFilter",
     tracks          = cms.InputTag("unpackedTracksAndVertices"),   # your unpacker output
     primaryVertices = cms.InputTag("unpackedTracksAndVertices"),   # same unpacker, default label
-    dzCut           = cms.double(999999),   # cm #1.5
+    dzCut           = cms.double(1.5),   # cm #1.5
 )
 
 modelInference = cms.EDProducer("modelInference",
@@ -72,17 +72,17 @@ inclusiveVertexFinder = cms.EDProducer('InclusiveVertexFinder',
     #clusterMaxSignificance = cms.double(9.), # 4.5 default |requirement on adding a track to the cluster
     #clusterMinAngleCosine = cms.double(0.25), # -2 to disable. | 0.5 default requirement on adding a track to the cluster
     #distanceRatio = cms.double(10.),
-    clusterMaxDistance = cms.double(0.05),   #default 0.05
+    clusterMaxDistance = cms.double(0.1),   #default 0.05
     clusterMaxSignificance = cms.double(4.5), #default 4.5 / 9
     clusterMinAngleCosine = cms.double(0.5), #default 0.5 / 0.25
-    distanceRatio = cms.double(20.),    # default 20 / 10
+    distanceRatio = cms.double(1.25),    # default 20 / 10
     maxTimeSignificance = cms.double(3.5), #default 3.5
     seedMax3DIPSignificance = cms.double(9999), #disabled
     seedMax3DIPValue = cms.double(9999), #disabled
     #seedMin3DIPSignificance = cms.double(0.6), # which tracks can start a cluster
     #seedMin3DIPValue = cms.double(0.0025),  # which tracks can start a cluster
     seedMin3DIPSignificance = cms.double(1.2), #defaul 1.2 / 0.6
-    seedMin3DIPValue = cms.double(0.005), # defailt 0.005 / 0.0025
+    seedMin3DIPValue = cms.double(0.00125), # defailt 0.005 / 0.0025
   ),
   fitterRatio = cms.double(0.25),
   fitterSigmacut = cms.double(3),
@@ -90,15 +90,15 @@ inclusiveVertexFinder = cms.EDProducer('InclusiveVertexFinder',
   maxNTracks = cms.uint32(30),
   maximumLongitudinalImpactParameter = cms.double(0.3), # 0.3
   maximumTimeSignificance = cms.double(3), # default 3.0
-  minHits = cms.uint32(8), #8 / 4
+  minHits = cms.uint32(4), #8 / 4
   minPt = cms.double(minTrackPt), #0.8
   primaryVertices = cms.InputTag('filteredTracks'),
   tracks = cms.InputTag('filteredTracks'),
   useDirectVertexFitter = cms.bool(True),
   useVertexReco = cms.bool(True),
-  vertexMinAngleCosine = cms.double(0.95), #0.95 default  / 0.25
-  vertexMinDLen2DSig = cms.double(2.5), #2.5 default //2 / 0.125
-  vertexMinDLenSig = cms.double(0.5), #0.5 default / 0.125
+  vertexMinAngleCosine = cms.double(0.5), #0.95 default  / 0.25
+  vertexMinDLen2DSig = cms.double(1.25), #2.5 default //2 / 0.125
+  vertexMinDLenSig = cms.double(1.5), #0.5 default / 0.125
   vertexReco = cms.PSet(
     finder = cms.string('avr'),
     primcut = cms.double(1),
@@ -152,7 +152,7 @@ myFinalInclusiveSecondaryVertices = vertexMerger.clone(
 svTable = cms.EDProducer("SVTableProducer", 
                         pvSrc=cms.InputTag("filteredTracks"),
                         src = cms.InputTag("myFinalInclusiveSecondaryVertices"),
-                        dlenSigMin = cms.double(3)) #3/0
+                        dlenSigMin = cms.double(2)) #3/0
 
 
 # Missing cut in dlen and dlenSig
@@ -214,6 +214,7 @@ trackTable = cms.EDProducer(
     externalVariables = cms.PSet(
         # ValueMap<int> produced by TrackGenMatcher, keyed to the SAME
         # "filteredTracks" collection used as src above.
+        # MC-only: removed for data in trackTableFor(isMC=False)
         genPartIdx = ExtVar(cms.InputTag("trackGenMatch", "genPartIdx"),"int",doc="index of the matched gen particle in the genMatch source collection, -1 if unmatched"),
         dz         = ExtVar(cms.InputTag("trackVertexVars", "dz"), "float",doc="track dz w.r.t. the primary vertex"),
         isMuon = ExtVar(cms.InputTag("trackVertexVars", "isMuon"), "int",doc="track is a muon"),
@@ -237,11 +238,53 @@ trackTable = cms.EDProducer(
 
     ),
 )
-def custom_sv_tracks(process, threshold_values=(0.0, 0., 0.), f1=0.7, minSig1=2, f2=1., minSig2=0.):
+
+
+# ---------------------------------------------------------------------------
+# MC/data helpers
+# ---------------------------------------------------------------------------
+
+def trackTableFor(isMC, withInference=True):
+  """Return a clone of trackTable suitable for MC or data.
+  Data: drop the gen-matching column (trackGenMatch does not exist).
+  withInference=False: drop the GNN score columns (training ntuples)."""
+  t = trackTable.clone()
+  if not isMC:
+    delattr(t.externalVariables, "genPartIdx")
+  if not withInference:
+    for name in ["nodeScore_%d" % i for i in range(6)] + ["svScores"]:
+      delattr(t.externalVariables, name)
+  return t
+
+
+def _chain(modules):
+  """Build a cms.Sequence from a list of modules, preserving order."""
+  seq = modules[0]
+  for m in modules[1:]:
+    seq = seq * m
+  return cms.Sequence(seq)
+
+
+def apply_overrides(process, overrides):
+  # overrides: {parameter name: value}; see the options registered in main_cfg.py
+  for name, val in overrides.items():
+    if name in ('clusterMaxDistance', 'clusterMaxSignificance', 'clusterMinAngleCosine', 'distanceRatio',
+                'seedMin3DIPSignificance', 'seedMin3DIPValue'):
+      setattr(process.inclusiveVertexFinder.clusterizer, name, cms.double(val))
+    elif name in ('vertexMinAngleCosine', 'vertexMinDLen2DSig', 'vertexMinDLenSig'):
+      setattr(process.inclusiveVertexFinder, name, cms.double(val))
+    elif name == 'dlenSigMin': # svTable and the GV table must use the same cut, otherwise the mySV tables mismatch
+      process.svTable.dlenSigMin = cms.double(val)
+      if hasattr(process, "gvMatchTable"):   # MC only
+        process.gvMatchTable.dlenSigMin = cms.double(val)
+    else:
+      raise ValueError("Unknown override: "+name)
+  print("sv_reco overrides:", overrides)
+
+
+def custom_sv_tracks(process, threshold_values=(0.0, 0., 0.), f1=0.7, minSig1=2, f2=1., minSig2=0., overrides=None, isMC=True):
   process.unpackedTracksAndVertices = unpackedTracksAndVertices
   process.filteredTracks = filteredTracks
-  
-  
   
   process.inclusiveVertexFinder = inclusiveVertexFinder.clone(
         svScoreThreshold=cms.double(threshold_values[0]),
@@ -261,66 +304,67 @@ def custom_sv_tracks(process, threshold_values=(0.0, 0., 0.), f1=0.7, minSig1=2,
   )
   process.svTable = svTable
   process.modelInference = modelInference
-  process.trackGenMatch = trackGenMatch
-  process.trackTable = trackTable
+  process.trackTable = trackTableFor(isMC)
   process.trackPairFeatures = trackPairFeatures
-  process.trackPairLabels = trackPairLabels
   process.trackVertexVars = trackVertexVars
-  #process.trackGVFeatures = cms.EDProducer("TrackGVFeaturesProducer",
-  #        tracks = cms.InputTag("filteredTracks"),
-  #        primaryVertices = cms.InputTag("filteredTracks"),
-  #        genPartIdx = cms.InputTag("trackGenMatch", "genPartIdx"),
-  #        #secondaryVertices = cms.InputTag("myFinalInclusiveSecondaryVertices"),
-  #        gvTable = cms.InputTag("gvProducer", "GVTable"),
-  #        gvDaughtersTable = cms.InputTag("gvProducer", "GVDaughtersTable"),
-  #        trkPtCut = cms.double(0.4),
-  #        dRMatchMax = cms.double(0.02),
-  #        relPtMatchMax = cms.double(0.2),
-  #        trkMinPt = cms.double(minTrackPt),
-  #        trkMaxEta = cms.double(2.5),
-  #    )
-  
-  process.sv_track = cms.Sequence(    
-                                    process.unpackedTracksAndVertices*
-                                    process.filteredTracks*
-                                    # Add variables as value map for tracks
-                                    process.trackVertexVars*
-                                    # Match any track to any genparticle in the event
-                                    process.trackGenMatch*
-                                    # Derive pairfeatures
-                                    process.trackPairFeatures*
-                                    # Run inference on the track graph
-                                    process.modelInference*
-                                    process.trackTable*
-                                    # Derive labels for pairs and traks
-                                    #process.trackGVFeatures*
-                                    process.trackPairLabels*
-                                    process.inclusiveVertexFinder*
-                                    process.vertexMerger*
-                                    process.trackVertexArbitrator*
-                                    process.myFinalInclusiveSecondaryVertices*
-                                    process.svTable
-                                      )
+
+  modules = [
+      process.unpackedTracksAndVertices,
+      process.filteredTracks,
+      # Add variables as value map for tracks
+      process.trackVertexVars,
+  ]
+  if isMC:
+    # Match any track to any genparticle in the event (needs customMergedGenParticles)
+    process.trackGenMatch = trackGenMatch
+    modules.append(process.trackGenMatch)
+  modules += [
+      # Derive pairfeatures
+      process.trackPairFeatures,
+      # Run inference on the track graph
+      process.modelInference,
+      process.trackTable,
+  ]
+  if isMC:
+    # Derive labels for pairs and tracks (needs genVertexTable + trackGenMatch)
+    process.trackPairLabels = trackPairLabels
+    modules.append(process.trackPairLabels)
+  modules += [
+      process.inclusiveVertexFinder,
+      process.vertexMerger,
+      process.trackVertexArbitrator,
+      process.myFinalInclusiveSecondaryVertices,
+      process.svTable,
+  ]
+  process.sv_track = _chain(modules)
+
+  if overrides:
+    apply_overrides(process, overrides)
   return process
 
 
-
-
-def custom_sv_tracks_training(process):
+def custom_sv_tracks_training(process, isMC=True):
   process.unpackedTracksAndVertices = unpackedTracksAndVertices
   process.filteredTracks = filteredTracks
   process.trackVertexVars = trackVertexVars
-  process.trackGenMatch = trackGenMatch
-  process.trackTable = trackTable
-  process.sv_track = cms.Sequence(    process.unpackedTracksAndVertices*
-                                      process.filteredTracks*
-                                      process.trackVertexVars*
-                                      process.trackGenMatch*
-                                      process.trackTable
-                                      )
+  # no modelInference in this sequence -> drop the GNN score columns too
+  process.trackTable = trackTableFor(isMC, withInference=False)
+
+  modules = [
+      process.unpackedTracksAndVertices,
+      process.filteredTracks,
+      process.trackVertexVars,
+  ]
+  if isMC:
+    process.trackGenMatch = trackGenMatch
+    modules.append(process.trackGenMatch)
+  modules.append(process.trackTable)
+  process.sv_track = _chain(modules)
   return process
 
+
 def custom_train_features(process, gvProducerLabel="genVertexProducer"):
+    # MC-only: needs trackGenMatch and the gen-vertex producer
     process.trackGVFeatures = cms.EDProducer("TrackGVFeaturesProducer",
         tracks = cms.InputTag("filteredTracks"),
         primaryVertices = cms.InputTag("filteredTracks"),
