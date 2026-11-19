@@ -31,7 +31,7 @@ modelInference = cms.EDProducer("modelInference",
     dRMatchMax = cms.double(0.001),
     relPtMatchMax = cms.double(0.2),
     trackPairSrc = cms.InputTag("trackPairFeatures", "trackPair"),
-    model_path = cms.FileInPath("PhysicsTools/data/best_20261001_142559.onnx"),
+    model_path = cms.FileInPath("PhysicsTools/data/best_20261114_172748.onnx"),
 )
 trackPairFeatures = cms.EDProducer("TrackPairFeaturesProducer",
     tracks = cms.InputTag("filteredTracks"),
@@ -72,17 +72,17 @@ inclusiveVertexFinder = cms.EDProducer('InclusiveVertexFinder',
     #clusterMaxSignificance = cms.double(9.), # 4.5 default |requirement on adding a track to the cluster
     #clusterMinAngleCosine = cms.double(0.25), # -2 to disable. | 0.5 default requirement on adding a track to the cluster
     #distanceRatio = cms.double(10.),
-    clusterMaxDistance = cms.double(0.1),   #default 0.05
-    clusterMaxSignificance = cms.double(4.5), #default 4.5 / 9
-    clusterMinAngleCosine = cms.double(0.5), #default 0.5 / 0.25
+    clusterMaxDistance = cms.double(0.09375),   #default 0.05
+    clusterMaxSignificance = cms.double(9), #default 4.5 / 9
+    clusterMinAngleCosine = cms.double(0.8), #default 0.5 / 0.25
     distanceRatio = cms.double(1.25),    # default 20 / 10
     maxTimeSignificance = cms.double(3.5), #default 3.5
     seedMax3DIPSignificance = cms.double(9999), #disabled
     seedMax3DIPValue = cms.double(9999), #disabled
     #seedMin3DIPSignificance = cms.double(0.6), # which tracks can start a cluster
     #seedMin3DIPValue = cms.double(0.0025),  # which tracks can start a cluster
-    seedMin3DIPSignificance = cms.double(1.2), #defaul 1.2 / 0.6
-    seedMin3DIPValue = cms.double(0.00125), # defailt 0.005 / 0.0025
+    seedMin3DIPSignificance = cms.double(1.08), #defaul 1.2 / 0.6
+    seedMin3DIPValue = cms.double(0.003375), # defailt 0.005 / 0.0025
   ),
   fitterRatio = cms.double(0.25),
   fitterSigmacut = cms.double(3),
@@ -96,9 +96,9 @@ inclusiveVertexFinder = cms.EDProducer('InclusiveVertexFinder',
   tracks = cms.InputTag('filteredTracks'),
   useDirectVertexFitter = cms.bool(True),
   useVertexReco = cms.bool(True),
-  vertexMinAngleCosine = cms.double(0.5), #0.95 default  / 0.25
-  vertexMinDLen2DSig = cms.double(1.25), #2.5 default //2 / 0.125
-  vertexMinDLenSig = cms.double(1.5), #0.5 default / 0.125
+  vertexMinAngleCosine = cms.double(0.95), #0.95 default  / 0.25
+  vertexMinDLen2DSig = cms.double(0.443556), #2.5 default //2 / 0.125
+  vertexMinDLenSig = cms.double(0.55), #0.5 default / 0.125
   vertexReco = cms.PSet(
     finder = cms.string('avr'),
     primcut = cms.double(1),
@@ -152,7 +152,7 @@ myFinalInclusiveSecondaryVertices = vertexMerger.clone(
 svTable = cms.EDProducer("SVTableProducer", 
                         pvSrc=cms.InputTag("filteredTracks"),
                         src = cms.InputTag("myFinalInclusiveSecondaryVertices"),
-                        dlenSigMin = cms.double(2)) #3/0
+                        dlenSigMin = cms.double(1.5)) #3/0
 
 
 # Missing cut in dlen and dlenSig
@@ -171,7 +171,7 @@ trackVertexVars = cms.EDProducer("TrackVertexVars",
     #Arguments to know if a track was a seed
     seedMax3DIPSignificance = cms.double(9999),   # disabled
     seedMax3DIPValue        = cms.double(9999),   # disabled
-    seedMin3DIPSignificance = cms.double(1.2),    # default 1.2
+    seedMin3DIPSignificance = cms.double(1.08),    # default 1.2
     seedMin3DIPValue        = cms.double(0.005), # default 0.005
 )
 
@@ -370,8 +370,8 @@ def custom_train_features(process, gvProducerLabel="genVertexProducer"):
         primaryVertices = cms.InputTag("filteredTracks"),
         genPartIdx = cms.InputTag("trackGenMatch", "genPartIdx"),
         #secondaryVertices = cms.InputTag("myFinalInclusiveSecondaryVertices"),
-        gvTable = cms.InputTag(gvProducerLabel, "GVTable"),
-        gvDaughtersTable = cms.InputTag(gvProducerLabel, "GVDaughtersTable"),
+        gvTable = cms.InputTag("genVertexTable", "GVTable"),
+        gvDaughtersTable = cms.InputTag("genVertexTable", "GVDaughtersTable"),
         trkPtCut = cms.double(minTrackPt),
         dRMatchMax = cms.double(0.02),
         relPtMatchMax = cms.double(0.2),

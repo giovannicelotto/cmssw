@@ -1,6 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 minTrackPt =0.4
-minTrackPt_gen =0.8
+minTrackPt_gen =0.4
 # For candidate collection only
 genCandidateVertexProducer = cms.EDProducer("GenVertexCandidateProducer",
     genParticles = cms.InputTag("customMergedGenParticles"),
@@ -25,9 +25,9 @@ genCentralVertexProducer = cms.EDProducer("GenVertexCandidateProducer",
 # For track collection only
 genVertexTable = cms.EDProducer("GVProducer",
     genParticles = cms.InputTag("customMergedGenParticles"),
-    minHadronPt = cms.double(10.0),  
+    minHadronPt = cms.double(1.0),  
     minDaughterPt = cms.double(minTrackPt_gen),  
-    maxHadronEta = cms.double(2.5),
+    maxHadronEta = cms.double(2.7),
     maxDaughterEta = cms.double(2.5)   
 )
 
@@ -51,7 +51,7 @@ gvMatchTable = cms.EDProducer("GVMatchProducer",
 
     # matching parameters, unchanged from the original module
     nRequiredCommonTracks = cms.int32(2),
-    dlenSigMin = cms.double(2.),
+    dlenSigMin = cms.double(1.5),
     trkMinPt = cms.double(minTrackPt),
     trkMaxEta = cms.double(2.5),
     dR_max = cms.double(0.03),

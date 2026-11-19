@@ -132,7 +132,7 @@ void GenVertexCandidateProducer::produce(edm::Event& iEvent,
         for(size_t i=0; i<genParticles->size(); ++i){
             const reco::Candidate* hadron = &(*genParticles)[i];
             //std::cout<<"Hadron "<<i<<" PDG ID: "<<hadron->pdgId()<<", pt: "<<hadron->pt()<<", eta: "<<hadron->eta()<<std::endl;
-            if(!(hadron->pt()>10 && std::abs(hadron->eta())<2.5)) continue;
+            if(!(hadron->pt()>1 && std::abs(hadron->eta())<2.7)) continue;
 
             int hadPDG = checkPDG(std::abs(hadron->pdgId())); // 1: Beauty, 2: Charmed, 3: Strange,  4: Tau,  0: Else
             if(hadPDG==0) continue;
@@ -148,7 +148,7 @@ void GenVertexCandidateProducer::produce(edm::Event& iEvent,
             for(size_t j=0; j<genParticles->size(); ++j){
                 const reco::Candidate* dau = &(*genParticles)[j];
                 if(dau==hadron) continue;
-                if(!(dau->status()==1 && dau->charge()!=0 && dau->pt()>0.8 && std::abs(dau->eta())<2.5)) continue;
+                if(!(dau->status()==1 && dau->charge()!=0 && dau->pt()>0.4 && std::abs(dau->eta())<2.5)) continue;
 
                 auto GV = isAncestor(hadron,dau); //takes the x,y,z of the daughter (decay point of the hadron)
                 if(GV.has_value()){
@@ -478,7 +478,7 @@ std::pair<std::vector<int>, std::vector<float>>  GenVertexCandidateProducer::mat
         for (size_t i = 0; i < SVtrk_SVidx.size(); ++i) {
             // among all tracks from all SV, select those from the candidate SV
             //std::cout<<" Track index "<<i<<" SVtrk_SVidx: "<<SVtrk_SVidx[i]<<" SVtrk_pt: "<<SVtrk_pt[i]<<" Best SV :"<<bestSV<<std::endl;
-            if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > 0.8 && std::fabs(SVtrk_eta[i]) < 2.5) {
+            if (SVtrk_SVidx[i] == bestSV && SVtrk_pt[i] > 0.4 && std::fabs(SVtrk_eta[i]) < 2.5) {
                 svTrackIdxs_fromBestSV.push_back(i);
             }
         }
