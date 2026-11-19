@@ -20,6 +20,7 @@ options = VarParsing('python')
 
 
 options.register('collection', "candidate", VarParsing.multiplicity.singleton,VarParsing.varType.string,    "collection chosen")
+options.register('globalTag', "150X_mcRun3_2024_realistic_v2", VarParsing.multiplicity.singleton, VarParsing.varType.string, "Global tag")
 options.register('SVLoose',     0.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for SV score to enter in IVF")
 options.register('SVSeed',      0.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for SV score to be a seed for IVF")
 options.register('SVEdge',      0.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for edgeScore_ij of track j to be included in seed of track i")
@@ -44,8 +45,8 @@ process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 
 process.MessageLogger.cerr.FwkReport.reportEvery = 100
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(5000),
-    output = cms.untracked.int32(5000)
+    input = cms.untracked.int32(1001),
+    output = cms.untracked.int32(1001)
 )
 process.Timing = cms.Service("Timing",
     summaryOnly = cms.untracked.bool(True),
@@ -60,9 +61,10 @@ process.SimpleMemoryCheck = cms.Service("SimpleMemoryCheck",
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring( (
         #train
+        "/store/mc/RunIII2024Summer24MiniAODv6/TTtoLNu2Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/2520000/00045344-a602-4022-ac1e-81161a31a314.root",
         #'/store/mc/RunIII2024Summer24MiniAODv6/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/110000/01af4637-202e-4830-abe8-b129a6fc6a0c.root', 
         #validation
-        '/store/mc/RunIII2024Summer24MiniAODv6/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/110000/00cbbb1e-7f25-47d0-9d35-13eb12e55cb6.root' 
+        #'/store/mc/RunIII2024Summer24MiniAODv6/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/110000/00cbbb1e-7f25-47d0-9d35-13eb12e55cb6.root' 
         #"/store/mc/RunIII2024Summer24MiniAODv6/QCD_Bin-PT-15to7000_Par-PT-Flat_TuneCH3_13p6TeV_herwig7/MINIAODSIM/NoPU_150X_mcRun3_2024_realistic_v2_ext2-v2/100000/003bdd8a-afd1-402d-ab83-c300d729b8d9.root"
         #'file:/work/gcelotto/btv_mini_rerun/CMSSW_15_0_6/src/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8.root'
      ) ),
@@ -115,7 +117,7 @@ if options.outputFile=="output.root":
         processName = "outputBTV.root" 
     else:
         #processName = options.collection+".root"
-        processName = "TTtoLNu2Q_BTV_0p4_dE_dzCut1p5.root"
+        processName = "BTV_SV_MC_training.root"
 else:
     processName = options.outputFile
 process.NANOEDMAODSIM1output = cms.OutputModule("NanoAODOutputModule",
@@ -157,7 +159,7 @@ process.NANOEDMAODSIM1output = cms.OutputModule("NanoAODOutputModule",
 
 # Other statements
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, '150X_mcRun3_2024_realistic_v2', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, options.globalTag, '')
 
 
 
@@ -239,7 +241,8 @@ elif options.collection=="track":
                                 process.customFinalGenParticles*
                                 process.customGenParticleTable+
                                 process.sv_track*
-                                process.genVertexProducer_sequence*
+                                process.genVertexTable*
+
                                 process.trackGVFeatures 
                                 )
     

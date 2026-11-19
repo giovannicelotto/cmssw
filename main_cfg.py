@@ -26,15 +26,16 @@ options = VarParsing('python')
 options.register('isMC',        True,        VarParsing.multiplicity.singleton,  VarParsing.varType.bool,    "True for MC, False for data")
 options.register('globalTag',   "",          VarParsing.multiplicity.singleton,  VarParsing.varType.string,  "Global tag override (empty = default for MC/data)")
 options.register('collection', "candidate", VarParsing.multiplicity.singleton,VarParsing.varType.string,    "collection chosen")
-options.register('SVLoose',     0.75,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for SV score to enter in IVF")
-options.register('SVSeed',      0.85,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for SV score to be a seed for IVF")
+options.register('SVLoose',     0.65,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for SV score to enter in IVF")
+options.register('SVSeed',      0.9,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for SV score to be a seed for IVF")
 options.register('SVEdge',      0.95,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "Threshold for edgeScore_ij of track j to be included in seed of track i")
 
 options.register('skimEMu',     False,       VarParsing.multiplicity.singleton,  VarParsing.varType.bool,    "Keep only events with an opposite-charge mu-e pair and >=2 jets (loose, ID-free pre-selection for the BTVNanoCommissioning ttdilep e-mu selection); track collection only")
-options.register('f1',          0.6,        VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f1")
-options.register('minS1',       4.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS1")
-options.register('f2',          0.8,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f2") # 1 to disable, 0.2 default
-options.register('minS2',       20.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS2") # 0 to disable, 10 default
+options.register('skimSemilep',     True,       VarParsing.multiplicity.singleton,  VarParsing.varType.bool,    "Keep only events with a lepton and >=4 jets (loose, ID-free pre-selection for the BTVNanoCommissioning ttdilep semilep selection); track collection only")
+options.register('f1',          1,        VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f1")
+options.register('minS1',       2.,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS1")
+options.register('f2',          0.4,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "f2") # 1 to disable, 0.2 default
+options.register('minS2',       2.5,         VarParsing.multiplicity.singleton,  VarParsing.varType.float,   "minS2") # 0 to disable, 10 default
 
 # Overrides for sv_reco_cff.py parameters ("track" collection). -999 = keep the value written in sv_reco_cff.py
 UNSET = -999.
@@ -70,8 +71,10 @@ process.maxEvents = cms.untracked.PSet(
 # Input source
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring( (
+        "file:/pnfs/psi.ch/cms/trivcat/store/user/gcelotto/BTV_SV/input/ttlnu2q_00045344.root",
+        #"/store/mc/RunIII2024Summer24MiniAODv6/TTtoLNu2Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/2520000/002a5728-2fdf-47b8-b1e1-7f2cc8976351.root"
         #'/store/data/Run2024C/MuonEG/MINIAOD/MINIv6NANOv15-v1/2530000/0058e4ed-6b17-4a79-abe8-afdc9f6d337b.root',
-        '/store/mc/RunIII2024Summer24MiniAODv6/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/110000/01af4637-202e-4830-abe8-b129a6fc6a0c.root',
+        #'/store/mc/RunIII2024Summer24MiniAODv6/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/MINIAODSIM/150X_mcRun3_2024_realistic_v2-v2/110000/01af4637-202e-4830-abe8-b129a6fc6a0c.root',
         #'/store/mc/Run3Summer19MiniAOD/TTToHadronic_TuneCP5_14TeV-powheg-pythia8/MINIAODSIM/2024Scenario_106X_mcRun3_2024_realistic_v4-v2/60000/0173267F-D040-B14E-B16B-0602E6CBC48C.root',
         #"/store/mc/RunIII2024Summer24MiniAODv6/QCD_Bin-PT-15to7000_Par-PT-Flat_TuneCH3_13p6TeV_herwig7/MINIAODSIM/NoPU_150X_mcRun3_2024_realistic_v2_ext2-v2/100000/003bdd8a-afd1-402d-ab83-c300d729b8d9.root"
         #'file:/work/gcelotto/btv_mini_rerun/CMSSW_15_0_6/src/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8.root'
@@ -125,7 +128,7 @@ if options.outputFile=="output.root":
         processName = "outputBTV.root" 
     else:
         #processName = options.collection+".root"
-        processName = "BTV_SV_Data24CD_skimmed_splitting2.root"
+        processName = "BTV_SV_MC_inference.root"
 else:
     processName = options.outputFile
 process.NANOEDMAODSIM1output = cms.OutputModule("NanoAODOutputModule",
@@ -264,7 +267,52 @@ if options.skimEMu:
     # the muon/electron/jet selectors filter on >=1 object, the count filters on the pair and >=2 jets
     process.NANOEDMAODSIM1output.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring('nanoAOD_step'))
 
+if options.skimSemilep:
+    if options.collection != "track":
+        raise RuntimeError("skimSemilep is only implemented for collection=track")
+    if options.skimEMu:
+        raise RuntimeError("skimEMu and skimSemilep are mutually exclusive")
 
+    process.semilepSkimMuons = cms.EDFilter("PATMuonSelector",
+        src = cms.InputTag("slimmedMuons"),
+        cut = cms.string("pt > 25 && abs(eta) < 2.4"),
+        filter = cms.bool(False))
+    process.semilepSkimElectrons = cms.EDFilter("PATElectronSelector",
+        src = cms.InputTag("slimmedElectrons"),
+        cut = cms.string("pt > 25 && abs(eta) < 2.5"),
+        filter = cms.bool(False))
+
+    # exactly 1 entry in the merged list <=> (1 mu && 0 e) || (0 mu && 1 e)
+    process.semilepSkimLeptons = cms.EDProducer("CandViewMerger",
+        src = cms.VInputTag("semilepSkimMuons", "semilepSkimElectrons"))
+        # leptons: >=1 and NOT >=2  ->  exactly 1
+    process.semilepSkimLeptonFilter = cms.EDFilter("CandViewCountFilter",
+        src = cms.InputTag("semilepSkimLeptons"),
+        minNumber = cms.uint32(1))
+    process.semilepSkimLeptonVeto = cms.EDFilter("CandViewCountFilter",
+        src = cms.InputTag("semilepSkimLeptons"),
+        minNumber = cms.uint32(2))
+
+    process.semilepSkimJets = cms.EDFilter("PATJetSelector",
+        src = cms.InputTag("slimmedJetsPuppi"),
+        cut = cms.string("pt > 20 && abs(eta) < 2.5"),
+        filter = cms.bool(False))
+    # jets: >=4 and NOT >=5  ->  exactly 4
+    process.semilepSkimJetFilter = cms.EDFilter("CandViewCountFilter",
+        src = cms.InputTag("semilepSkimJets"),
+        minNumber = cms.uint32(4))
+    process.semilepSkimJetVeto = cms.EDFilter("CandViewCountFilter",
+        src = cms.InputTag("semilepSkimJets"),
+        minNumber = cms.uint32(5))
+
+    process.semilepSkim = cms.Sequence(
+        process.semilepSkimMuons * process.semilepSkimElectrons *
+        process.semilepSkimLeptons *
+        process.semilepSkimLeptonFilter * ~process.semilepSkimLeptonVeto *
+        process.semilepSkimJets *
+        process.semilepSkimJetFilter * ~process.semilepSkimJetVeto)
+    process.NANOEDMAODSIM1output.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring('nanoAOD_step'))
+    
 #.
 #.    PATHS
 #.
@@ -287,6 +335,7 @@ elif options.collection=="track":
                                  isMC=isMC)
     # genWeightsTable keeps the run/lumi-level sum of weights: it has to see every event, so it stays before the skim
     skim = process.emuSkim if options.skimEMu else cms.Sequence()
+    skim = process.semilepSkim if options.skimSemilep else skim
     if isMC:
         process = custom_train_features(process, gvProducerLabel="gvProducer")
         process.nanoAOD_step = cms.Path(
